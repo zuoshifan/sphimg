@@ -121,11 +121,11 @@ class DishArray(telescope.TransitTelescope):
         """Calculate the unique baseline pairs.
 
         Pairs are considered identical if they have the same baseline
-        separation,
+        separation.
 
         Parameters
         ----------
-        fpairs : np.ndarray
+        feedpairs : np.ndarray
             An array of all the feed pairs, packed as [[i1, i2, ...], [j1, j2, ...] ].
 
         Returns
