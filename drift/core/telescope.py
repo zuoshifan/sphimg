@@ -143,7 +143,7 @@ class TransitTelescope(config.Reader):
     Properties
     ----------
     freq_lower, freq_higher : scalar
-        The center of the lowest and highest frequency bands.
+        The lower / upper bound of the lowest / highest frequency bands.
     num_freq : scalar
         The number of frequency bands (only use for setting up the frequency
         binning). Generally using `nfreq` is preferred.
