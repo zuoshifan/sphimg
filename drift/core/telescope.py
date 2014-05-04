@@ -96,8 +96,10 @@ def max_lm(baselines, wavelengths, uwidth, vwidth=0.0):
         An array of baselines.
     wavelengths : np.ndarray
         An array of wavelengths.
-    width : np.ndarray
+    uwidth : np.ndarray
         Width of the receiver in the u-direction.
+    vwidth : np.ndarray
+        Width of the receiver in the v-direction.
 
     Returns
     -------
