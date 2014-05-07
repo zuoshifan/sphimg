@@ -967,15 +967,15 @@ class PolarisedTelescope(TransitTelescope):
 
 
 class SimpleUnpolarisedTelescope(UnpolarisedTelescope):
-    """A base for a polarised telescope.
+    """A base for a unpolarised telescope.
 
     Again, an abstract class, but the only things that require implementing are
     the `feedpositions`, `_get_unique` and the beam functions `beamx` and `beamy`.
 
     Abstract Methods
     ----------------
-    beamx, beamy : methods
-        Routines giving the field pattern for the x and y feeds.
+    beam : method
+        Routines giving the field pattern for the feeds.
     """
 
     __metaclass__ = abc.ABCMeta
@@ -983,13 +983,13 @@ class SimpleUnpolarisedTelescope(UnpolarisedTelescope):
 
     @property
     def beamclass(self):
-        """Simple beam mode of dual polarisation feeds."""
+        """Simple beam mode of single polarisation feeds."""
         return np.zeros(self._single_feedpositions.shape[0], dtype=np.int)
 
 
     @abc.abstractproperty
     def _single_feedpositions(self):
-        """An (nfeed,2) array of the feed positions relative to an arbitary point (in m)"""
+        """An (nfeed,2) array of the feed positions relative to an arbitrary point (in m)"""
         return
 
     @property
@@ -1030,7 +1030,7 @@ class SimplePolarisedTelescope(PolarisedTelescope):
 
     @abc.abstractproperty
     def _single_feedpositions(self):
-        """An (nfeed,2) array of the feed positions relative to an arbitary point (in m)"""
+        """An (nfeed,2) array of the feed positions relative to an arbitrary point (in m)"""
         return
 
     @property
