@@ -33,18 +33,31 @@ from drift.core import kltransform
 
 
 def svd_gen(A, errmsg=None, *args, **kwargs):
-    """Find the inverse of A.
+    """Singular Value Decomposition of `A`.
 
-    If a standard matrix inverse has issues try using the pseudo-inverse.
+    Factorizes the matrix `A` into two unitary matrices U and Vh, and
+    a 1-D array s of singular values (real, non-negative) such that
+    ``a == U*S*Vh``, where S is a suitably shaped matrix of zeros with
+    main diagonal s.
 
     Parameters
     ----------
-    A : np.ndarray
-        Matrix to invert.
+    A : (M, N) array_like
+        Matrix to decompose.
 
     Returns
     -------
-    inv : np.ndarray
+    U : ndarray
+        Unitary matrix having left singular vectors as columns.
+    s : ndarray
+        The singular values, sorted in non-increasing order.
+    Vh : ndarray
+        Unitary matrix having right singular vectors as rows.
+
+    Raises
+    ------
+    LinAlgError
+        If SVD computation does not converge.
     """
     try:
         res = la.svd(A, *args, **kwargs)
