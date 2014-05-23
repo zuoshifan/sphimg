@@ -1,5 +1,6 @@
 import numpy as np
 import scipy.linalg
+from drift.util import mpiutil
 
 
 def svd_dm(matrix, full_matrices=True):
@@ -139,4 +140,68 @@ def pinv_dm(matrix, *args, **kwargs):
         pinv_matrix[i] = scipy.linalg.pinv(matrix[i], *args, **kwargs)
 
     return pinv_matrix
+
+
+## Note: python 2.x doesn't support keyword-only argument,
+## see http://stackoverflow.com/questions/15301999/python-2-x-default-arguments-with-args-and-kwargs
+# def inv_dm(matrix, *args, hermi=True, **kwargs):
+def inv_dm(matrix, hermi=True, *args, **kwargs):
+    """Construct the inverse of a block diagonal square matrix if exists, else try pseudo-inverse.
+
+    Parameters
+    ----------
+    matrix : (nblocks, n, n) np.ndarray
+        An array containing `nblocks` diagonal blocks of size (`n`, `n`).
+    hermi : boolean, optional
+        Whether `matrix` is a Hermitian or real symmetric matrix?
+
+    Returns
+    -------
+    inv_matrix : (nblocks, n, n) np.ndarray
+         An array containing the inverse or pseudo-inverse.
+    """
+    
+    if matrix.shape[-1] != matrix.shape[-2]:
+        raise Exception('Expect a block diagonal square matrix.')
+        
+    nblocks, n, n = matrix.shape
+
+    inv_matrix = np.empty((nblocks, n, n), dtype=matrix.dtype)
+
+    for i in range(nblocks):
+        try:
+            inv_matrix[i] = scipy.linalg.inv(matrix[i])
+        except scipy.linalg.LinAlgError as e:
+            if mpiutil.rank0:
+                print 'Construct inverse failed for %d-th singular matrix, trying pseudo-inverse instead...' % i
+            if hermi:
+                inv_matrix[i] = scipy.linalg.pinvh(matrix[i], *args, **kwargs)
+            else:
+                inv_matrix[i] = scipy.linalg.pinv(matrix[i], *args, **kwargs)
+
+    return inv_matrix
+
+
+def conj_dm(matrix, *args, **kwargs):
+    """Construct the hermitian (conjugate) transpose of a block diagonal matrix.
+
+    Parameters
+    ----------
+    matrix : (nblocks, n, m) np.ndarray
+        An array containing `nblocks` diagonal blocks of size (`n`, `m`).
+
+    Returns
+    -------
+    conj_matrix : (nblocks, m, n) np.ndarray
+         An array containing the hermitian (conjugate) transpose.
+    """
+    
+    nblocks, n, m = matrix.shape
+
+    conj_matrix = np.empty((nblocks, m, n), dtype=matrix.dtype)
+
+    for i in range(nblocks):
+        conj_matrix[i] = matrix[i].T.conj()
+
+    return conj_matrix
 

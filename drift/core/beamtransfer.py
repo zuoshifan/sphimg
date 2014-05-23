@@ -389,8 +389,12 @@ class BeamTransfer(object):
             beam = beam * noisew[:, np.newaxis, np.newaxis]
 
         beam = beam.reshape((self.nfreq, self.ntel, self.nsky))
-
-        ibeam = blockla.pinv_dm(beam, rcond=1e-6)
+        beamH = blockla.conj_dm(beam)
+        BHB = blockla.multiply_dm_dm(beamH, beam)
+        inv_BHB = blockla.inv_dm(BHB, hermi=True, rcond=1e-6)
+        
+        # ibeam = blockla.pinv_dm(beam, rcond=1e-6)
+        ibeam = blockla.multiply_dm_dm(inv_BHB, beamH)
 
         if self.noise_weight:
             # Reshape to make it easy to multiply baselines by noise level
