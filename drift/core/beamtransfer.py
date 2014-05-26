@@ -1003,13 +1003,24 @@ class BeamTransfer(object):
             Sky vector to return.
         """
 
-        ibeam = self.invbeam_m(mi).reshape((self.nfreq, self.nsky, self.ntel))
+        # ibeam = self.invbeam_m(mi).reshape((self.nfreq, self.nsky, self.ntel))
+        beam = self.beam_m(mi)
+        beam = beam.reshape(self.nfreq, self.ntel, self.nsky)
 
         vecb = np.zeros((self.nfreq, self.nsky), dtype=np.complex128)
         vec = vec.reshape((self.nfreq, self.ntel))
 
+        # self.noise_weight = False
         for fi in range(self.nfreq):
-            vecb[fi] = np.dot(ibeam[fi], vec[fi, :].reshape(self.ntel))
+            if self.noise_weight:
+                noisew = self.telescope.noisepower(np.arange(self.telescope.npairs), fi).flatten()**(-0.5)
+                beam[fi] = beam[fi] * noisew[fi, np.newaxis, np.newaxis]
+                vec[fi] = vec[fi] * noisew[fi, np.newaxis]
+            # vecb[fi] = np.dot(ibeam[fi], vec[fi, :].reshape(self.ntel))
+            # vecb[fi] = la.lu_solve(la.lu_factor(np.dot(beam[fi].T.conj(), beam[fi])), np.dot(beam[fi].T.conj(), vec[fi]))  # failed for singular matrix
+            vecb[fi], resids, rank, s = la.lstsq(np.dot(beam[fi].T.conj(), beam[fi]), np.dot(beam[fi].T.conj(), vec[fi]), cond=1e-6)
+            # if mpiutil.rank0:
+            #     print 'For frequency index %d, resids = %s, rank = %s, singular values = %s.' % (fi, resids, rank, s)
 
         return vecb.reshape((self.nfreq, self.telescope.num_pol_sky,
                              self.telescope.lmax + 1))
