@@ -1014,8 +1014,9 @@ class BeamTransfer(object):
         for fi in range(self.nfreq):
             if self.noise_weight:
                 noisew = self.telescope.noisepower(np.arange(self.telescope.npairs), fi).flatten()**(-0.5)
-                beam[fi] = beam[fi] * noisew[fi, np.newaxis, np.newaxis]
-                vec[fi] = vec[fi] * noisew[fi, np.newaxis]
+                noisew = np.concatenate([noisew, noisew])
+                beam[fi] = beam[fi] * noisew[:, np.newaxis]
+                vec[fi] = vec[fi] * noisew
             # vecb[fi] = np.dot(ibeam[fi], vec[fi, :].reshape(self.ntel))
             # vecb[fi] = la.lu_solve(la.lu_factor(np.dot(beam[fi].T.conj(), beam[fi])), np.dot(beam[fi].T.conj(), vec[fi]))  # failed for singular matrix
             vecb[fi], resids, rank, s = la.lstsq(np.dot(beam[fi].T.conj(), beam[fi]), np.dot(beam[fi].T.conj(), vec[fi]), cond=1e-6)
