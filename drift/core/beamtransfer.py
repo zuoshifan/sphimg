@@ -986,6 +986,8 @@ class BeamTransfer(object):
     project_vector_forward = project_vector_sky_to_telescope
 
 
+    beam_cut = 1.0e-3
+    
     def project_vector_telescope_to_sky(self, mi, vec):
         """Invert a vector from the telescope space onto the sky. This is the
         map-making process.
@@ -1012,6 +1014,9 @@ class BeamTransfer(object):
 
         # self.noise_weight = False
         for fi in range(self.nfreq):
+            # very small value beam matrices will lead to noisy strips in the final maps
+            if np.max(beam[fi].real) < self.beam_cut and np.max(beam[fi].imag) < self.beam_cut:
+                continue
             if self.noise_weight:
                 noisew = self.telescope.noisepower(np.arange(self.telescope.npairs), fi).flatten()**(-0.5)
                 noisew = np.concatenate([noisew, noisew])
