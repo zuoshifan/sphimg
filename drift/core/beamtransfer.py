@@ -1015,7 +1015,7 @@ class BeamTransfer(object):
         # self.noise_weight = False
         for fi in range(self.nfreq):
             # very small value beam matrices will lead to noisy strips in the final maps
-            if np.max(beam[fi].real) < self.beam_cut and np.max(beam[fi].imag) < self.beam_cut:
+            if np.max(np.abs(beam[fi].real)) <= self.beam_cut and np.max(np.abs(beam[fi].imag)) <= self.beam_cut:
                 continue
             if self.noise_weight:
                 noisew = self.telescope.noisepower(np.arange(self.telescope.npairs), fi).flatten()**(-0.5)
