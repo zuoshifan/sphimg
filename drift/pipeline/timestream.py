@@ -333,8 +333,9 @@ class Timestream(object):
 
         def _make_alm(mi):
 
-            svdmode = self.mmode_svd(mi)
+            print "Making %i" % mi
 
+            svdmode = self.mmode_svd(mi)
             sphmode = self.beamtransfer.project_vector_svd_to_sky(mi, svdmode)
 
             return sphmode

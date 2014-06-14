@@ -1308,7 +1308,7 @@ class BeamTransfer(object):
         svnum, svbounds = self._svd_num(mi)
 
         # Get the SVD beam matrix
-        beam = self.beam_svd(mi) if conj else self.invbeam_svd(mi)
+        beam = self.beam_svd(mi) # if conj else self.invbeam_svd(mi)
         
         # Create the output matrix
         vecf = np.zeros((self.nfreq, self.telescope.num_pol_sky, self.telescope.lmax + 1,) + vec.shape[1:], dtype=np.complex128)
@@ -1316,14 +1316,21 @@ class BeamTransfer(object):
         for pi in range(npol):
             for fi in self._svd_freq_iter(mi):
 
+                lvec = vec[svbounds[fi]:svbounds[fi+1]] # Matrix section for this frequency
                 if conj:
                     fbeam = beam[fi, :svnum[fi], pi, :].T.conj() # Beam matrix for this frequency and cut
+                    vecf[fi, pi] += np.dot(fbeam, lvec)
                 else:
-                    fbeam = beam[fi, pi, :, :svnum[fi]] # Beam matrix for this frequency and cut
+                    # fbeam = beam[fi, pi, :, :svnum[fi]] # Beam matrix for this frequency and cut
+                    fbeam = beam[fi, :svnum[fi], pi, :]
+                    # if np.max(fbeam.real) <= self.beam_cut and np.max(fbeam.imag) <= self.beam_cut:
+                    if np.max(fbeam.real) <= 1.0e3 and np.max(fbeam.imag) <= 1.0e3:
+                        continue
+                    vecf[fi, pi], resids, rank, s = la.lstsq(np.dot(fbeam.T.conj(), fbeam), np.dot(fbeam.T.conj(), lvec), cond=1e-6)
 
-                lvec = vec[svbounds[fi]:svbounds[fi+1]] # Matrix section for this frequency
+                # lvec = vec[svbounds[fi]:svbounds[fi+1]] # Matrix section for this frequency
 
-                vecf[fi, pi] += np.dot(fbeam, lvec)
+                # vecf[fi, pi] += np.dot(fbeam, lvec)
 
         return vecf
 
