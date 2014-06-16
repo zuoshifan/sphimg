@@ -986,8 +986,10 @@ class BeamTransfer(object):
     project_vector_forward = project_vector_sky_to_telescope
 
 
-    beam_cut = 1.0e-3
-    
+    # beam_cut = 1.0e-3
+    # beam_cut_list = []
+    rank_ratio = 0.1
+
     def project_vector_telescope_to_sky(self, mi, vec):
         """Invert a vector from the telescope space onto the sky. This is the
         map-making process.
@@ -1013,10 +1015,14 @@ class BeamTransfer(object):
         vec = vec.reshape((self.nfreq, self.ntel))
 
         # self.noise_weight = False
+        # flag = True
         for fi in range(self.nfreq):
             # very small value beam matrices will lead to noisy strips in the final maps
-            if np.max(np.abs(beam[fi].real)) <= self.beam_cut and np.max(np.abs(beam[fi].imag)) <= self.beam_cut:
-                continue
+            # if np.max(np.abs(beam[fi].real)) <= self.beam_cut and np.max(np.abs(beam[fi].imag)) <= self.beam_cut:
+            #     self.beam_cut_list.append((mi, fi))
+            #     flag = False
+                # continue
+
             if self.noise_weight:
                 noisew = self.telescope.noisepower(np.arange(self.telescope.npairs), fi).flatten()**(-0.5)
                 noisew = np.concatenate([noisew, noisew])
@@ -1024,7 +1030,20 @@ class BeamTransfer(object):
                 vec[fi] = vec[fi] * noisew
             # vecb[fi] = np.dot(ibeam[fi], vec[fi, :].reshape(self.ntel))
             # vecb[fi] = la.lu_solve(la.lu_factor(np.dot(beam[fi].T.conj(), beam[fi])), np.dot(beam[fi].T.conj(), vec[fi]))  # failed for singular matrix
-            vecb[fi], resids, rank, s = la.lstsq(np.dot(beam[fi].T.conj(), beam[fi]), np.dot(beam[fi].T.conj(), vec[fi]), cond=1e-6)
+            x, resids, rank, s = la.lstsq(np.dot(beam[fi].T.conj(), beam[fi]), np.dot(beam[fi].T.conj(), vec[fi]), cond=1e-6)
+            if rank > self.rank_ratio * self.nsky:
+                vecb[fi] = x
+            # print 'beam shape: ', beam[fi].shape
+            # if flag:
+            #     datafile = 'norm.txt'
+            # else:
+            #     datafile = 'anorm.txt'
+            # with open(datafile, 'a') as f:
+            #     # f.write('resids: %s\n' % resids)
+            #     # f.write('rank: %s\n\n' % rank)
+            #     f.write('%s\n' % rank)
+            #     # f.write('s: %s' % s)
+            #     # f.write('cond: %s' % (s[0] / s[-1]))
             # if mpiutil.rank0:
             #     print 'For frequency index %d, resids = %s, rank = %s, singular values = %s.' % (fi, resids, rank, s)
 
@@ -1324,9 +1343,12 @@ class BeamTransfer(object):
                     # fbeam = beam[fi, pi, :, :svnum[fi]] # Beam matrix for this frequency and cut
                     fbeam = beam[fi, :svnum[fi], pi, :]
                     # if np.max(fbeam.real) <= self.beam_cut and np.max(fbeam.imag) <= self.beam_cut:
-                    if np.max(fbeam.real) <= 1.0e3 and np.max(fbeam.imag) <= 1.0e3:
-                        continue
-                    vecf[fi, pi], resids, rank, s = la.lstsq(np.dot(fbeam.T.conj(), fbeam), np.dot(fbeam.T.conj(), lvec), cond=1e-6)
+                    # if np.max(fbeam.real) <= 1.0e3 and np.max(fbeam.imag) <= 1.0e3:
+                    # if (mi, fi) in self.beam_cut_list:
+                        # continue
+                    x, resids, rank, s = la.lstsq(np.dot(fbeam.T.conj(), fbeam), np.dot(fbeam.T.conj(), lvec), cond=1e-6)
+                    if rank > 1.45 * self.rank_ratio * fbeam.shape[1]:
+                        vecf[fi, pi] = x
 
                 # lvec = vec[svbounds[fi]:svbounds[fi+1]] # Matrix section for this frequency
 
