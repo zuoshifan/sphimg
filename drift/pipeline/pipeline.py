@@ -28,8 +28,10 @@ class PipelineManager(config.Reader):
     output_directory : string
         Directory to store timestream outputs in.
 
-    generate_modes : boolean
-        Calculate m-modes and svd-modes.
+    generate_mmodes : boolean
+        Calculate m-modes.
+    generate_svdmodes : boolean
+        Calculate svd-modes.
     generate_klmodes : boolean
         Calculate KL-modes?
     generate_powerspectra : boolean
@@ -51,7 +53,8 @@ class PipelineManager(config.Reader):
     product_directory = config.Property(proptype=str, default='')
 
     # Actions to perform
-    generate_modes = config.Property(proptype=bool, default=True)
+    generate_mmodes = config.Property(proptype=bool, default=True)
+    generate_svdmodes = config.Property(proptype=bool, default=True)
     generate_klmodes = config.Property(proptype=bool, default=True)
     generate_powerspectra = config.Property(proptype=bool, default=True)
     generate_full_map = config.Property(proptype=bool, default=True)
@@ -153,26 +156,32 @@ class PipelineManager(config.Reader):
     def generate(self):
         """Generate pipeline outputs."""
 
-        if self.generate_modes:
+        if self.generate_mmodes:
 
             for tsname, tsobj in self.timestreams.items():
-                print "Generating modes (%s)" % tsname
+                print "Generating m-modes (%s)" % tsname
 
                 tsobj.generate_mmodes()
-                tsobj.generate_mmodes_svd()            
+
+        if self.generate_svdmodes:
+
+            for tsname, tsobj in self.timestreams.items():
+                print "Generating svd modes (%s)" % tsname
+
+                tsobj.generate_mmodes_svd()
 
         if self.generate_klmodes:
 
             for tsname, tsobj in self.timestreams.items():
 
-                for klname in self.klmodes:                
+                for klname in self.klmodes:
                     print "Generating KL filter (%s:%s)" % (tsname, klname)
 
                     tsobj.set_kltransform(klname)
                     tsobj.generate_mmodes_kl()
 
                     if self.collect_klmodes:
-                        tsobj.collect_mmodes_kl()                
+                        tsobj.collect_mmodes_kl()
 
 
         if self.generate_powerspectra:
@@ -191,7 +200,6 @@ class PipelineManager(config.Reader):
 
                     tsobj.powerspectrum()
 
-            
 
             for xp in self.crosspower:
 
@@ -218,7 +226,7 @@ class PipelineManager(config.Reader):
 
             for tsname, tsobj in self.timestreams.items():
 
-                for klname in self.klmaps:                
+                for klname in self.klmaps:
                     print "Generating KL map (%s:%s)" % (tsname, klname)
 
                     mapfile = 'map_%s.hdf5' % klname
