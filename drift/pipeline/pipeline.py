@@ -54,7 +54,9 @@ class PipelineManager(config.Reader):
     generate_modes = config.Property(proptype=bool, default=True)
     generate_klmodes = config.Property(proptype=bool, default=True)
     generate_powerspectra = config.Property(proptype=bool, default=True)
-    generate_maps = config.Property(proptype=bool, default=True)
+    generate_full_map = config.Property(proptype=bool, default=True)
+    generate_svd_map = config.Property(proptype=bool, default=True)
+    generate_kl_map = config.Property(proptype=bool, default=True)
 
     no_m_zero = config.Property(proptype=bool, default=True)
 
@@ -212,7 +214,7 @@ class PipelineManager(config.Reader):
                 timestream.cross_powerspectrum(tslist, psname, psfile)
 
 
-        if self.generate_maps:
+        if self.generate_kl_map:
 
             for tsname, tsobj in self.timestreams.items():
 
@@ -224,13 +226,18 @@ class PipelineManager(config.Reader):
                     tsobj.set_kltransform(klname)
                     tsobj.mapmake_kl(self.nside, mapfile, wiener=self.wiener, rank_ratio=self.kl_rank_ratio)
 
-    
+
+        if self.generate_svd_map:
 
                 print "Generating SVD map (%s)" % tsname
                 tsobj.mapmake_svd(self.nside, 'map_svd.hdf5', self.svdmap_fwhm, rank_ratio=self.svd_rank_ratio)
 
+
+        if self.generate_full_map:
+
                 print "Generating full map (%s)" % tsname
                 tsobj.mapmake_full(self.nside, 'map_full.hdf5', self.fullmap_fwhm, rank_ratio=self.full_rank_ratio)
+
 
         if mpiutil.rank0:
             print "========================================"
@@ -238,7 +245,6 @@ class PipelineManager(config.Reader):
             print "=           DONE AT LAST!!             ="
             print "=                                      ="
             print "========================================"
-
 
 
     run = generate
