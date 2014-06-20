@@ -988,9 +988,9 @@ class BeamTransfer(object):
 
     # beam_cut = 1.0e-3
     # beam_cut_list = []
-    rank_ratio = 0.09
+    # rank_ratio = 0.09
 
-    def project_vector_telescope_to_sky(self, mi, vec):
+    def project_vector_telescope_to_sky(self, mi, vec, rank_ratio):
         """Invert a vector from the telescope space onto the sky. This is the
         map-making process.
 
@@ -1000,6 +1000,8 @@ class BeamTransfer(object):
             Mode index to fetch for.
         vec : np.ndarray
             Sky data vector packed as [freq, baseline, polarisation]
+        rank_ratio : float
+            Set :math:`a_{lm}=0` for :math:`\mathbf{Ba=v}` if rank(:math:`\mathbf{B}}`) <= `rank_ratio` * self.nsky. Those alms often cause noisy strips in the final sky map.
 
         Returns
         -------
@@ -1037,7 +1039,7 @@ class BeamTransfer(object):
             # vecb[fi] = np.dot(ibeam[fi], vec[fi, :].reshape(self.ntel))
             # vecb[fi] = la.lu_solve(la.lu_factor(np.dot(beam[fi].T.conj(), beam[fi])), np.dot(beam[fi].T.conj(), vec[fi]))  # failed for singular matrix
             x, resids, rank, s = la.lstsq(np.dot(beam[fi].T.conj(), beam[fi]), np.dot(beam[fi].T.conj(), vec[fi]), cond=1e-6)
-            if rank > self.rank_ratio * self.nsky:
+            if rank > rank_ratio * self.nsky:
                 # vecb[fi] = x
                 for p in range(npol):
                     vecb[fi, p, mi:] = x[p*(lside-mi):(p+1)*(lside-mi)]
@@ -1307,7 +1309,7 @@ class BeamTransfer(object):
         return vecf
 
 
-    def project_vector_svd_to_sky(self, mi, vec, temponly=False, conj=False):
+    def project_vector_svd_to_sky(self, mi, vec, rank_ratio, temponly=False, conj=False):
         """Project a vector from the the sky into the SVD basis.
 
         Parameters
@@ -1316,6 +1318,8 @@ class BeamTransfer(object):
             Mode index to fetch for.
         vec : np.ndarray
             Sky data vector packed as [nfreq, lmax+1]
+        rank_ratio : float
+            Set :math:`a_{lm}=0` for :math:`\mathbf{\bar{B}a=\bar{v}}` if rank(:math:`\mathbf{\bar{B}}`) <= `rank_ratio` * (lmax + 1). Those alms often cause noisy strips in the final sky map.
         temponly: boolean
             Force projection of temperature part only (default: False)
         conj: boolean
@@ -1359,7 +1363,7 @@ class BeamTransfer(object):
                     # if (mi, fi) in self.beam_cut_list:
                         # continue
                     x, resids, rank, s = la.lstsq(np.dot(fbeam.T.conj(), fbeam), np.dot(fbeam.T.conj(), lvec), cond=1e-6)
-                    if rank > 1.8 * self.rank_ratio * lside:
+                    if rank > rank_ratio * lside:
                         vecf[fi, pi, mi:] = x
 
                 # lvec = vec[svbounds[fi]:svbounds[fi+1]] # Matrix section for this frequency

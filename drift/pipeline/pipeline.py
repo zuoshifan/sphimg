@@ -2,6 +2,7 @@ import os.path
 
 import yaml
 
+from drift.util import mpiutil
 from drift.core import manager
 from drift.util import config
 from drift.pipeline import timestream
@@ -64,8 +65,11 @@ class PipelineManager(config.Reader):
     crosspower = []
 
     # Specific map-making options
-    fullmap_fwhm = config.Property(proptype=float, default=0.1)
-    svdmap_fwhm = config.Property(proptype=float, default=0.1)
+    fullmap_fwhm = config.Property(proptype=float, default=0.0)
+    svdmap_fwhm = config.Property(proptype=float, default=0.0)
+    full_rank_ratio = config.Property(proptype=float, default=0.0)
+    svd_rank_ratio = config.Property(proptype=float, default=0.0)
+    kl_rank_ratio = config.Property(proptype=float, default=0.0)
     nside = config.Property(proptype=int, default=128)
     wiener = config.Property(proptype=bool, default=False)
 
@@ -218,16 +222,22 @@ class PipelineManager(config.Reader):
                     mapfile = 'map_%s.hdf5' % klname
 
                     tsobj.set_kltransform(klname)
-                    tsobj.mapmake_kl(self.nside, mapfile, wiener=self.wiener)
+                    tsobj.mapmake_kl(self.nside, mapfile, wiener=self.wiener, rank_ratio=self.kl_rank_ratio)
 
     
 
                 print "Generating SVD map (%s)" % tsname
-                tsobj.mapmake_svd(self.nside, 'map_svd.hdf5', self.svdmap_fwhm)
+                tsobj.mapmake_svd(self.nside, 'map_svd.hdf5', self.svdmap_fwhm, rank_ratio=self.svd_rank_ratio)
 
                 print "Generating full map (%s)" % tsname
-                tsobj.mapmake_full(self.nside, 'map_full.hdf5', self.fullmap_fwhm)
+                tsobj.mapmake_full(self.nside, 'map_full.hdf5', self.fullmap_fwhm, rank_ratio=self.full_rank_ratio)
 
+        if mpiutil.rank0:
+            print "========================================"
+            print "=                                      ="
+            print "=           DONE AT LAST!!             ="
+            print "=                                      ="
+            print "========================================"
 
 
 
