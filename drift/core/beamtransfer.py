@@ -988,7 +988,7 @@ class BeamTransfer(object):
 
     # beam_cut = 1.0e-3
     # beam_cut_list = []
-    rank_ratio = 0.1
+    rank_ratio = 0.09
 
     def project_vector_telescope_to_sky(self, mi, vec):
         """Invert a vector from the telescope space onto the sky. This is the
@@ -1009,9 +1009,15 @@ class BeamTransfer(object):
 
         # ibeam = self.invbeam_m(mi).reshape((self.nfreq, self.nsky, self.ntel))
         beam = self.beam_m(mi)
-        beam = beam.reshape(self.nfreq, self.ntel, self.nsky)
+        npol = beam.shape[-2]
+        lside = beam.shape[-1] # lmax + 1
+        nsky = npol * (lside - mi) # 4 * (lmax + 1 - mi)
+        beam = beam[..., mi:] # all zero for l < m
+        # beam = beam.reshape(self.nfreq, self.ntel, self.nsky)
+        beam = beam.reshape(self.nfreq, self.ntel, nsky)
 
-        vecb = np.zeros((self.nfreq, self.nsky), dtype=np.complex128)
+        # vecb = np.zeros((self.nfreq, self.nsky), dtype=np.complex128)
+        vecb = np.zeros((self.nfreq, npol, lside), dtype=np.complex128)
         vec = vec.reshape((self.nfreq, self.ntel))
 
         # self.noise_weight = False
@@ -1032,7 +1038,9 @@ class BeamTransfer(object):
             # vecb[fi] = la.lu_solve(la.lu_factor(np.dot(beam[fi].T.conj(), beam[fi])), np.dot(beam[fi].T.conj(), vec[fi]))  # failed for singular matrix
             x, resids, rank, s = la.lstsq(np.dot(beam[fi].T.conj(), beam[fi]), np.dot(beam[fi].T.conj(), vec[fi]), cond=1e-6)
             if rank > self.rank_ratio * self.nsky:
-                vecb[fi] = x
+                # vecb[fi] = x
+                for p in range(npol):
+                    vecb[fi, p, mi:] = x[p*(lside-mi):(p+1)*(lside-mi)]
             # print 'beam shape: ', beam[fi].shape
             # if flag:
             #     datafile = 'norm.txt'
@@ -1047,8 +1055,9 @@ class BeamTransfer(object):
             # if mpiutil.rank0:
             #     print 'For frequency index %d, resids = %s, rank = %s, singular values = %s.' % (fi, resids, rank, s)
 
-        return vecb.reshape((self.nfreq, self.telescope.num_pol_sky,
-                             self.telescope.lmax + 1))
+        # return vecb.reshape((self.nfreq, self.telescope.num_pol_sky,
+        #                      self.telescope.lmax + 1))
+        return vecb
 
     project_vector_backward = project_vector_telescope_to_sky
 
