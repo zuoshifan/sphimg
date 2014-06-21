@@ -80,7 +80,7 @@ class PipelineManager(config.Reader):
 
     timestreams = {}
     simulations = {}
-    manager = None
+    prodmanager = None
 
     collect_klmodes = config.Property(proptype=bool, default=True)
 
@@ -118,8 +118,9 @@ class PipelineManager(config.Reader):
             tsdir = fixpath(tsconf['directory'])
 
             # Load ProductManager and Timestream
-            pm = manager.ProductManager.from_config(self.product_directory)
-            ts = timestream.Timestream(tsdir, pm)
+            if self.prodmanager is None:
+                self.prodmanager = manager.ProductManager.from_config(self.product_directory)
+            ts = timestream.Timestream(tsdir, self.prodmanager)
 
             if 'output_directory' in tsconf:
                 outdir = fixpath(tsconf['output_directory'])
@@ -147,8 +148,9 @@ class PipelineManager(config.Reader):
             if os.path.exists(ts._ffile(0)):
                 print "Looks like timestream already exists. Skipping...."
             else:
-                m = manager.ProductManager.from_config(simconf['product_directory'])
-                timestream.simulate(m, ts.directory, **simconf)
+                # m = manager.ProductManager.from_config(simconf['product_directory'])
+                # timestream.simulate(m, ts.directory, **simconf)
+                timestream.simulate(self.prodmanager, ts.directory, **simconf)
 
 
 
@@ -237,11 +239,15 @@ class PipelineManager(config.Reader):
 
         if self.generate_svd_map:
 
+            for tsname, tsobj in self.timestreams.items():
+
                 print "Generating SVD map (%s)" % tsname
                 tsobj.mapmake_svd(self.nside, 'map_svd.hdf5', self.svdmap_fwhm, rank_ratio=self.svd_rank_ratio)
 
 
         if self.generate_full_map:
+
+            for tsname, tsobj in self.timestreams.items():
 
                 print "Generating full map (%s)" % tsname
                 tsobj.mapmake_full(self.nside, 'map_full.hdf5', self.fullmap_fwhm, rank_ratio=self.full_rank_ratio)
