@@ -7,6 +7,12 @@ from drift.core import manager
 from drift.util import config
 from drift.pipeline import timestream
 
+
+def none_or_int(val):
+    if val is not None:
+        val = int(val)
+    return val
+
 def fixpath(path):
     """Fix up path (expanding variables etc.)"""
     path = os.path.expanduser(path)
@@ -75,6 +81,9 @@ class PipelineManager(config.Reader):
     full_rank_ratio = config.Property(proptype=float, default=0.0)
     svd_rank_ratio = config.Property(proptype=float, default=0.0)
     kl_rank_ratio = config.Property(proptype=float, default=0.0)
+    full_lcut = config.Property(proptype=none_or_int, default=None)
+    svd_lcut = config.Property(proptype=none_or_int, default=None)
+    kl_lcut = config.Property(proptype=none_or_int, default=None)
     nside = config.Property(proptype=int, default=128)
     wiener = config.Property(proptype=bool, default=False)
 
@@ -234,7 +243,7 @@ class PipelineManager(config.Reader):
                     mapfile = 'map_%s.hdf5' % klname
 
                     tsobj.set_kltransform(klname)
-                    tsobj.mapmake_kl(self.nside, mapfile, wiener=self.wiener, rank_ratio=self.kl_rank_ratio)
+                    tsobj.mapmake_kl(self.nside, mapfile, wiener=self.wiener, rank_ratio=self.kl_rank_ratio, lcut=self.kl_lcut)
 
 
         if self.generate_svd_map:
@@ -242,7 +251,7 @@ class PipelineManager(config.Reader):
             for tsname, tsobj in self.timestreams.items():
 
                 print "Generating SVD map (%s)" % tsname
-                tsobj.mapmake_svd(self.nside, 'map_svd.hdf5', self.svdmap_fwhm, rank_ratio=self.svd_rank_ratio)
+                tsobj.mapmake_svd(self.nside, 'map_svd.hdf5', self.svdmap_fwhm, rank_ratio=self.svd_rank_ratio, lcut=self.svd_lcut)
 
 
         if self.generate_full_map:
@@ -250,7 +259,7 @@ class PipelineManager(config.Reader):
             for tsname, tsobj in self.timestreams.items():
 
                 print "Generating full map (%s)" % tsname
-                tsobj.mapmake_full(self.nside, 'map_full.hdf5', self.fullmap_fwhm, rank_ratio=self.full_rank_ratio)
+                tsobj.mapmake_full(self.nside, 'map_full.hdf5', self.fullmap_fwhm, rank_ratio=self.full_rank_ratio, lcut=self.full_lcut)
 
 
         if mpiutil.rank0:

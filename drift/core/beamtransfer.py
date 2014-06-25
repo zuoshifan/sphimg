@@ -990,7 +990,7 @@ class BeamTransfer(object):
     # beam_cut_list = []
     # rank_ratio = 0.09
 
-    def project_vector_telescope_to_sky(self, mi, vec, rank_ratio):
+    def project_vector_telescope_to_sky(self, mi, vec, rank_ratio, lcut):
         """Invert a vector from the telescope space onto the sky. This is the
         map-making process.
 
@@ -1002,6 +1002,8 @@ class BeamTransfer(object):
             Sky data vector packed as [freq, baseline, polarisation]
         rank_ratio : float
             Set :math:`a_{lm}=0` for :math:`\mathbf{Ba=v}` if rank(:math:`\mathbf{B}}`) <= `rank_ratio` * self.nsky. Those alms often cause noisy strips in the final sky map.
+        lcut : interger
+            Cut threshold of 'l', must be mmax <= lcut <= lmax.
 
         Returns
         -------
@@ -1013,8 +1015,17 @@ class BeamTransfer(object):
         beam = self.beam_m(mi)
         npol = beam.shape[-2]
         lside = beam.shape[-1] # lmax + 1
-        nsky = npol * (lside - mi) # 4 * (lmax + 1 - mi)
-        beam = beam[..., mi:] # all zero for l < m
+        # if lcut == None, then lcut = lmax
+        lcut = lcut or lside -1
+        mmax = self.telescope.mmax
+        lcut = max(lcut, mmax) # must l >= m
+        lcut1 = lcut + 1
+        lcut1 = min(lcut1, lside) # must have lcut <= lmax
+        if mpiutil.rank0:
+            print 'Cut l at %d for lmax = %d, mmax = %d.' % (lcut1-1, lside-1, mmax)
+        # nsky = npol * (lside - mi) # 4 * (lmax + 1 - mi)
+        nsky = npol * (lcut1 - mi) # 4 * (lcut + 1 - mi)
+        beam = beam[..., mi:lcut1] # all zero for l < m
         # beam = beam.reshape(self.nfreq, self.ntel, self.nsky)
         beam = beam.reshape(self.nfreq, self.ntel, nsky)
 
@@ -1042,7 +1053,10 @@ class BeamTransfer(object):
             if rank > rank_ratio * self.nsky:
                 # vecb[fi] = x
                 for p in range(npol):
-                    vecb[fi, p, mi:] = x[p*(lside-mi):(p+1)*(lside-mi)]
+                    vecb[fi, p, mi:lcut1] = x[p*(lcut1-mi):(p+1)*(lcut1-mi)]
+            else:
+                # if mpiutil.rank0:
+                print 'Rank <= %.1f for m = %d, fi = %d...' % (rank_ratio*self.nsky, mi, fi)
             # print 'beam shape: ', beam[fi].shape
             # if flag:
             #     datafile = 'norm.txt'
@@ -1309,7 +1323,7 @@ class BeamTransfer(object):
         return vecf
 
 
-    def project_vector_svd_to_sky(self, mi, vec, rank_ratio, temponly=False, conj=False):
+    def project_vector_svd_to_sky(self, mi, vec, rank_ratio, lcut, temponly=False, conj=False):
         """Project a vector from the the sky into the SVD basis.
 
         Parameters
@@ -1320,6 +1334,8 @@ class BeamTransfer(object):
             Sky data vector packed as [nfreq, lmax+1]
         rank_ratio : float
             Set :math:`a_{lm}=0` for :math:`\mathbf{\bar{B}a=\bar{v}}` if rank(:math:`\mathbf{\bar{B}}`) <= `rank_ratio` * (lmax + 1). Those alms often cause noisy strips in the final sky map.
+        lcut : interger
+            Cut threshold of 'l', must be mmax <= lcut <= lmax.
         temponly: boolean
             Force projection of temperature part only (default: False)
         conj: boolean
@@ -1342,8 +1358,16 @@ class BeamTransfer(object):
         # Get the SVD beam matrix
         beam = self.beam_svd(mi) # if conj else self.invbeam_svd(mi)
         lside = beam.shape[-1] # lmax + 1
+        # if lcut == None, then lcut = lmax
+        lcut = lcut or lside -1
+        mmax = self.telescope.mmax
+        lcut = max(lcut, mmax) # must l >= m
+        lcut1 = lcut + 1
+        lcut1 = min(lcut1, lside) # must have lcut <= lmax
+        if mpiutil.rank0:
+            print 'Cut l at %d for lmax = %d, mmax = %d.' % (lcut1-1, lside-1, mmax)
         # nsky = npol * (lside - mi) # 4 * (lmax + 1 - mi)
-        beam = beam[..., mi:] # all zero for l < m
+        beam = beam[..., mi:lcut1] # all zero for l < m
         
         # Create the output matrix
         vecf = np.zeros((self.nfreq, self.telescope.num_pol_sky, self.telescope.lmax + 1,) + vec.shape[1:], dtype=np.complex128)
@@ -1364,7 +1388,9 @@ class BeamTransfer(object):
                         # continue
                     x, resids, rank, s = la.lstsq(np.dot(fbeam.T.conj(), fbeam), np.dot(fbeam.T.conj(), lvec), cond=1e-6)
                     if rank > rank_ratio * lside:
-                        vecf[fi, pi, mi:] = x
+                        vecf[fi, pi, mi:lcut1] = x
+                    else:
+                        print 'Rank <= %.1f for m = %d, fi = %d...' % (rank_ratio*self.nsky, mi, fi)
 
                 # lvec = vec[svbounds[fi]:svbounds[fi+1]] # Matrix section for this frequency
 

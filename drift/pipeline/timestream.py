@@ -293,7 +293,7 @@ class Timestream(object):
 
     #======== Make map from uncleaned stream ============
 
-    def mapmake_full(self, nside, mapname, fwhm=0.0, rank_ratio=0.0):
+    def mapmake_full(self, nside, mapname, fwhm=0.0, rank_ratio=0.0, lcut=None):
 
 
         def _make_alm(mi):
@@ -301,7 +301,7 @@ class Timestream(object):
             print "Making %i" % mi
 
             mmode = self.mmode(mi)
-            sphmode = self.beamtransfer.project_vector_telescope_to_sky(mi, mmode, rank_ratio)
+            sphmode = self.beamtransfer.project_vector_telescope_to_sky(mi, mmode, rank_ratio, lcut)
 
             return sphmode
 
@@ -328,7 +328,7 @@ class Timestream(object):
         mpiutil.barrier()
 
 
-    def mapmake_svd(self, nside, mapname, fwhm=0.0, rank_ratio=0.0):
+    def mapmake_svd(self, nside, mapname, fwhm=0.0, rank_ratio=0.0, lcut=None):
 
         self.generate_mmodes_svd()
 
@@ -337,7 +337,7 @@ class Timestream(object):
             print "Making %i" % mi
 
             svdmode = self.mmode_svd(mi)
-            sphmode = self.beamtransfer.project_vector_svd_to_sky(mi, svdmode, rank_ratio)
+            sphmode = self.beamtransfer.project_vector_svd_to_sky(mi, svdmode, rank_ratio, lcut)
 
             return sphmode
 
@@ -471,7 +471,7 @@ class Timestream(object):
         mpiutil.barrier()
 
 
-    def mapmake_kl(self, nside, mapname, wiener=False,  rank_ratio=0.0):
+    def mapmake_kl(self, nside, mapname, wiener=False,  rank_ratio=0.0, lcut=None):
 
         mapfile = self.output_directory + '/' + mapname
 
@@ -498,7 +498,7 @@ class Timestream(object):
 
             isvdmode = kl.project_vector_kl_to_svd(mi, klmode, threshold=self.klthreshold)
 
-            sphmode = self.beamtransfer.project_vector_svd_to_sky(mi, isvdmode, rank_ratio)
+            sphmode = self.beamtransfer.project_vector_svd_to_sky(mi, isvdmode, rank_ratio, lcut)
 
             return sphmode
 
