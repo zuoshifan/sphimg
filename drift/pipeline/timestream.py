@@ -105,21 +105,31 @@ class Timestream(object):
     #======== Fetch and generate the f-stream ===========
 
 
-    def _fdir(self, fi):
+    @property
+    def _fdir(self):
         # Pattern to form the `freq` ordered file.
-        pat = self.directory + "/timestream_f/" + util.natpattern(self.telescope.nfreq)
-        return pat % fi
+        # pat = self.directory + "/timestream_f/" + util.natpattern(self.telescope.nfreq)
+        # return pat % fi
+        return self.directory + '/timestream_f/'
 
 
     def _ffile(self, fi):
         # Pattern to form the `freq` ordered file.
-        return self._fdir(fi) + "/timestream.hdf5"
+        pat = self._fdir + "timestream_%s.hdf5" % util.natpattern(self.telescope.nfreq)
+        return pat % fi
+
+
+    @property
+    def _fcommondata_file(self):
+        return self._fdir + 'ts_commondata.hdf5'
+
 
     @property
     def ntime(self):
         """Get the number of timesamples."""
 
-        with h5py.File(self._ffile(0), 'r') as f:
+        # with h5py.File(self._ffile(0), 'r') as f:
+        with h5py.File(self._fcommondata_file, 'r') as f:
             ntime = f.attrs['ntime']
 
         return ntime
@@ -148,15 +158,19 @@ class Timestream(object):
 
     #======== Fetch and generate the m-modes ============
 
-    def _mdir(self, mi):
+    @property
+    def _mdir(self):
         # Pattern to form the `m` ordered file.
-        pat = self.output_directory + "/mmodes/" + util.natpattern(self.telescope.mmax)
-        return pat % abs(mi)
+        # pat = self.output_directory + "/mmodes/" + util.natpattern(self.telescope.mmax)
+        # return pat % abs(mi)
+        return self.output_directory + '/mmodes/'
 
 
     def _mfile(self, mi):
         # Pattern to form the `m` ordered file.
-        return self._mdir(mi) + '/mode.hdf5'
+        # return self._mdir(mi) + '/mode.hdf5'
+        pat = self._mdir + 'mode_%s.hdf5' % util.natpattern(self.telescope.mmax)
+        return pat % abs(mi)
 
 
     def mmode(self, mi):
@@ -184,7 +198,9 @@ class Timestream(object):
         """
 
 
-        if os.path.exists(self.output_directory + "/mmodes/COMPLETED_M"):
+        # if os.path.exists(self.output_directory + "/mmodes/COMPLETED_M"):
+        completed_file = self._mdir + 'COMPLETED_M'
+        if os.path.exists(completed_file):
             if mpiutil.rank0:
                 print "******* m-files already generated ********"
             return
@@ -220,11 +236,13 @@ class Timestream(object):
 
         for lmi, mi in enumerate(range(sm, em)):
 
-            # Make directory for each m-mode
-            if not os.path.exists(self._mdir(mi)):
-                os.makedirs(self._mdir(mi))
+            # Make directory for m-mode
+            try:
+                if not os.path.exists(self._mdir):
+                    os.makedirs(self._mdir)
+            except OSError:
+                pass
 
-            # Create the m-file and save the result.
             with h5py.File(self._mfile(mi), 'w') as f:
                 f.create_dataset('/mmode', data=col_mmodes[lmi])
                 f.attrs['m'] = mi
@@ -232,7 +250,7 @@ class Timestream(object):
         if mpiutil.rank0:
 
             # Make file marker that the m's have been correctly generated:
-            open(self.output_directory + "/mmodes/COMPLETED_M", 'a').close()
+            open(completed_file, 'a').close()
 
         mpiutil.barrier()
 
@@ -241,9 +259,16 @@ class Timestream(object):
 
     #======== Make and fetch SVD m-modes ================
 
+    @property
+    def _svddir(self):
+        # Pattern to form the `m` ordered file.
+        return self.output_directory + '/svdmodes/'
+
     def _svdfile(self, mi):
         # Pattern to form the `m` ordered file.
-        return self._mdir(mi) + '/svd.hdf5'
+        # return self._mdir(mi) + '/svd.hdf5'
+        pat = self._svddir + 'svd_%s.hdf5' % util.natpattern(self.telescope.mmax)
+        return pat % abs(mi)
 
 
     def mmode_svd(self, mi):
@@ -271,10 +296,30 @@ class Timestream(object):
         """Generate the SVD modes for the Timestream.
         """
         
+        completed_file = self._svddir + 'COMPLETED_SVD'
+        if os.path.exists(completed_file):
+            if mpiutil.rank0:
+                print "******* svd-files already generated ********"
+            return
+
+        completed_mlist = []
+        mlist_file = self._svddir + 'COMPLETED_SVDLIST'
+        if os.path.exists(mlist_file):
+            for mi in open(mlist_file, 'r'):
+                completed_mlist.append(int(mi))
+
         # Iterate over local m's, project mode and save to disk.
         for mi in mpiutil.mpirange(self.telescope.mmax + 1):
 
-            if os.path.exists(self._svdfile(mi)):
+            # Make directory for svd-mode
+            try:
+                if not os.path.exists(self._svddir):
+                    os.makedirs(self._svddir)
+            except OSError:
+                pass
+
+            # if os.path.exists(self._svdfile(mi)):
+            if mi in completed_mlist:
                 print "File %s exists. Skipping..." % self._svdfile(mi)
                 continue
 
@@ -284,6 +329,13 @@ class Timestream(object):
             with h5py.File(self._svdfile(mi), 'w') as f:
                 f.create_dataset('mmode_svd', data=svdm)
                 f.attrs['m'] = mi
+            with open(mlist_file, 'a') as f:
+                f.write('%d\n' % mi)
+
+        if mpiutil.rank0:
+
+            # Make file marker that the m's have been correctly generated:
+            open(completed_file, 'a').close()
 
         mpiutil.barrier()
 
@@ -291,10 +343,20 @@ class Timestream(object):
     #====================================================
 
 
+    @property
+    def _mapsdir(self):
+        return self.output_directory + '/maps/'
+
     #======== Make map from uncleaned stream ============
 
     def mapmake_full(self, nside, mapname, fwhm=0.0, rank_ratio=0.0, lcut=None):
 
+        mapfile = self._mapsdir + mapname
+
+        if os.path.exists(mapfile):
+            if mpiutil.rank0:
+                print "File %s exists. Skipping..." % mapfile
+            return
 
         def _make_alm(mi):
 
@@ -322,13 +384,25 @@ class Timestream(object):
 
             skymap = hputil.sphtrans_inv_sky(alm, nside)
 
-            with h5py.File(self.output_directory + '/' + mapname, 'w') as f:
+            # Make directory for maps file
+            # if mpiutil.rank0:
+            if not os.path.exists(self._mapsdir):
+                os.makedirs(self._mapsdir)
+
+            with h5py.File(mapfile, 'w') as f:
                 f.create_dataset('/map', data=skymap)
 
         mpiutil.barrier()
 
 
     def mapmake_svd(self, nside, mapname, fwhm=0.0, rank_ratio=0.0, lcut=None):
+
+        mapfile = self._mapsdir + mapname
+
+        if os.path.exists(mapfile):
+            if mpiutil.rank0:
+                print "File %s exists. Skipping..." % mapfile
+            return
 
         self.generate_mmodes_svd()
 
@@ -358,7 +432,12 @@ class Timestream(object):
 
             skymap = hputil.sphtrans_inv_sky(alm, nside)
 
-            with h5py.File(self.output_directory + '/' + mapname, 'w') as f:
+            # Make directory for maps file
+            # if mpiutil.rank0:
+            if not os.path.exists(self._mapsdir):
+                os.makedirs(self._mapsdir)
+
+            with h5py.File(mapfile, 'w') as f:
                 f.create_dataset('/map', data=skymap)
 
         mpiutil.barrier()
@@ -368,21 +447,38 @@ class Timestream(object):
 
     #========== Project into KL-mode basis ==============
 
-    def set_kltransform(self, klname, threshold=None):
+    def set_kltransform(self, klname, threshold=None, foreground_threshold=None):
 
         self.klname = klname
+        kl = self.manager.kltransforms[self.klname]
 
         if threshold is None:
-            kl = self.manager.kltransforms[self.klname]
+            # kl = self.manager.kltransforms[self.klname]
             threshold = kl.threshold
+        self.klthreshold = threshold
 
-        self.klthreshold = threshold 
+        if foreground_threshold is None:
+            try:
+                foreground_threshold = kl.foreground_threshold
+            except AttributeError:
+                pass
+
+        self.foreground_threshold = foreground_threshold
+
+
+    @property
+    def _kldir(self):
+        # Pattern to form the `m` ordered file.
+        if self.foreground_threshold is None:
+            return self.output_directory + '/klmodes/' + self.klname + '_%f/' % self.klthreshold
+        else:
+            return self.output_directory + '/klmodes/' + self.klname + '_%f_%f/' % (self.klthreshold, self.foreground_threshold)
 
     def _klfile(self, mi):
         # Pattern to form the `m` ordered file.
-        return self._mdir(mi) + ('/klmode_%s_%f.hdf5' % (self.klname, self.klthreshold))
-
-
+        # return self._mdir(mi) + ('/klmode_%s_%f.hdf5' % (self.klname, self.klthreshold))
+        pat = self._kldir + '%smode_%s.hdf5' % (self.klname, util.natpattern(self.telescope.mmax))
+        return pat % (mi)
 
 
     def mmode_kl(self, mi):
@@ -398,11 +494,31 @@ class Timestream(object):
         """
 
         kl = self.manager.kltransforms[self.klname]
-        
+
+        completed_file = self._kldir + 'COMPLETED_%s' % self.klname.upper()
+        if os.path.exists(completed_file):
+            if mpiutil.rank0:
+                print "******* %s-files already generated ********" % self.klname
+            return
+
+        completed_mlist = []
+        mlist_file = self._kldir + 'COMPLETED_%sLIST' % self.klname.upper()
+        if os.path.exists(mlist_file):
+            for mi in open(mlist_file, 'r'):
+                completed_mlist.append(int(mi))
+
         # Iterate over local m's, project mode and save to disk.
         for mi in mpiutil.mpirange(self.telescope.mmax + 1):
 
-            if os.path.exists(self._klfile(mi)):
+            # Make directory for kl-mode
+            try:
+                if not os.path.exists(self._kldir):
+                    os.makedirs(self._kldir)
+            except OSError:
+                pass
+
+            # if os.path.exists(self._klfile(mi)):
+            if mi in completed_mlist:
                 print "File %s exists. Skipping..." % self._klfile(mi)
                 continue
 
@@ -414,6 +530,13 @@ class Timestream(object):
             with h5py.File(self._klfile(mi), 'w') as f:
                 f.create_dataset('mmode_kl', data=klm)
                 f.attrs['m'] = mi
+            with open(mlist_file, 'a') as f:
+                f.write('%d\n' % mi)
+
+        if mpiutil.rank0:
+
+            # Make file marker that the m's have been correctly generated:
+            open(completed_file, 'a').close()
 
         mpiutil.barrier()
 
@@ -437,15 +560,17 @@ class Timestream(object):
         evarray = kltransform.collect_m_array(mlist, evfunc, shape, np.complex128)
 
         if mpiutil.rank0:
-            fname =  self.output_directory + ("/klmodes_%s_%f.hdf5"% (self.klname, self.klthreshold))
+            # fname =  self.output_directory + ("/klmodes_%s_%f.hdf5"% (self.klname, self.klthreshold))
+            if self.foreground_threshold is None:
+                fname = os.path.abspath(os.path.join(self._kldir, os.pardir)) + '/%smodes_%f.hdf5' % (self.klname, self.klthreshold)
+            else:
+                fname = os.path.abspath(os.path.join(self._kldir, os.pardir)) + '/%smodes_%f_%f.hdf5' % (self.klname, self.klthreshold, self.foreground_threshold)
             if os.path.exists(fname):
                 print "File: %s exists. Skipping..." % (fname)
                 return
 
             with h5py.File(fname, 'w') as f:
                 f.create_dataset('evals', data=evarray)
-
-
 
 
     def fake_kl_data(self):
@@ -473,11 +598,12 @@ class Timestream(object):
 
     def mapmake_kl(self, nside, mapname, wiener=False,  rank_ratio=0.0, lcut=None):
 
-        mapfile = self.output_directory + '/' + mapname
+        # mapfile = self.output_directory + '/' + mapname
+        mapfile = self._mapsdir + mapname
 
         if os.path.exists(mapfile):
             if mpiutil.rank0:
-                print "File %s exists. Skipping..."
+                print "File %s exists. Skipping..." % mapfile
             return
 
         kl = self.manager.kltransforms[self.klname]
@@ -518,6 +644,11 @@ class Timestream(object):
 
             skymap = hputil.sphtrans_inv_sky(alm, nside)
 
+            # Make directory for maps file
+            # if mpiutil.rank0:
+            if not os.path.exists(self._mapsdir):
+                os.makedirs(self._mapsdir)
+
             with h5py.File(mapfile, 'w') as f:
                 f.create_dataset('/map', data=skymap)
 
@@ -528,11 +659,14 @@ class Timestream(object):
 
     #======= Estimate powerspectrum from data ===========
 
+    @property
+    def _psdir(self):
+        return self.output_directory + '/ps/'
 
     @property
     def _psfile(self):
         # Pattern to form the `m` ordered file.
-        return self.output_directory + ('/ps_%s.hdf5' % self.psname)
+        return self._psdir + 'ps_%s.hdf5' % self.psname
 
 
 
@@ -543,7 +677,6 @@ class Timestream(object):
     def powerspectrum(self):
 
         import scipy.linalg as la
-        
 
         if os.path.exists(self._psfile):
             print "File %s exists. Skipping..." % self._psfile
@@ -568,6 +701,10 @@ class Timestream(object):
 
 
         if mpiutil.rank0:
+            # make directory for power spectrum files
+            if not os.path.exists(self._psdir):
+                os.makedirs(self._psdir)
+
             with h5py.File(self._psfile, 'w') as f:
 
 
@@ -759,6 +896,15 @@ def simulate(m, outdir, maps=[], ndays=None, resolution=0, seed=None, **kwargs):
     timestream : Timestream
     """
 
+    # Create timestream object
+    tstream = Timestream(outdir, m)
+
+    completed_file = tstream._fdir + 'COMPLETED_TIMESTREAM'
+    if os.path.exists(completed_file):
+        if mpiutil.rank0:
+            print "******* timestream-files already generated ********"
+        return
+
     ## Read in telescope system
     bt = m.beamtransfer
     tel = bt.telescope
@@ -884,20 +1030,20 @@ def simulate(m, outdir, maps=[], ndays=None, resolution=0, seed=None, **kwargs):
     tphi = np.linspace(0, 2*np.pi, ntime, endpoint=False)
 
     # Create timestream object
-    tstream = Timestream(outdir, m)
+    # tstream = Timestream(outdir, m)
 
     ## Iterate over the local frequencies and write them to disk.
     for lfi, fi in enumerate(local_freq):
 
         # Make directory if required
-        if not os.path.exists(tstream._fdir(fi)):
-            os.makedirs(tstream._fdir(fi))
+        try:
+            if not os.path.exists(tstream._fdir):
+                os.makedirs(tstream._fdir)
+        except OSError:
+            pass
 
         # Write file contents
-        with h5py.File(tstream._ffile(fi), 'w') as f:
-
-            # Timestream data
-            f.create_dataset('/timestream', data=vis_stream[:, lfi])
+        with h5py.File(tstream._fcommondata_file, 'w') as f:
             f.create_dataset('/phi', data=tphi)
 
             # Telescope layout data
@@ -910,6 +1056,16 @@ def simulate(m, outdir, maps=[], ndays=None, resolution=0, seed=None, **kwargs):
             # Write metadata
             f.attrs['beamtransfer_path'] = os.path.abspath(bt.directory)
             f.attrs['ntime'] = ntime
+
+        with h5py.File(tstream._ffile(fi), 'w') as f:
+
+            # Timestream data
+            f.create_dataset('/timestream', data=vis_stream[:, lfi])
+
+    if mpiutil.rank0:
+
+        # Make file marker that the m's have been correctly generated:
+        open(completed_file, 'a').close()
 
     tstream.save()
 

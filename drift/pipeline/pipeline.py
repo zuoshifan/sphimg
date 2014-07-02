@@ -39,9 +39,9 @@ class PipelineManager(config.Reader):
     generate_svdmodes : boolean
         Calculate svd-modes.
     generate_klmodes : boolean
-        Calculate KL-modes?
+        Calculate KL-modes.
     generate_powerspectra : boolean
-        Estimate powerspectra?
+        Estimate powerspectra.
 
     klmodes : list
         List of KL-filters to apply ['klname1', 'klname2', ...]
@@ -152,15 +152,19 @@ class PipelineManager(config.Reader):
 
         for tsname, simconf in self.simulations.items():
 
+            if mpiutil.rank0:
+                print
+                print '=' * 80
+                print 'Start simulation for %s...' % tsname
+
             ts = self.timestreams[tsname]
 
-            if os.path.exists(ts._ffile(0)):
-                print "Looks like timestream already exists. Skipping...."
-            else:
+            # if os.path.exists(ts._ffile(0)):
+            #     print "Looks like timestream already exists. Skipping...."
+            # else:
                 # m = manager.ProductManager.from_config(simconf['product_directory'])
                 # timestream.simulate(m, ts.directory, **simconf)
-                timestream.simulate(self.prodmanager, ts.directory, **simconf)
-
+            timestream.simulate(self.prodmanager, ts.directory, **simconf)
 
 
 
@@ -170,14 +174,20 @@ class PipelineManager(config.Reader):
         if self.generate_mmodes:
 
             for tsname, tsobj in self.timestreams.items():
-                print "Generating m-modes (%s)" % tsname
+                if mpiutil.rank0:
+                    print
+                    print '=' * 80
+                    print "Generating m-modes (%s)" % tsname
 
                 tsobj.generate_mmodes()
 
         if self.generate_svdmodes:
 
             for tsname, tsobj in self.timestreams.items():
-                print "Generating svd modes (%s)" % tsname
+                if mpiutil.rank0:
+                    print
+                    print '=' * 80
+                    print "Generating svd modes (%s)" % tsname
 
                 tsobj.generate_mmodes_svd()
 
@@ -186,7 +196,10 @@ class PipelineManager(config.Reader):
             for tsname, tsobj in self.timestreams.items():
 
                 for klname in self.klmodes:
-                    print "Generating KL filter (%s:%s)" % (tsname, klname)
+                    if mpiutil.rank0:
+                        print
+                        print '=' * 80
+                        print "Generating KL filter (%s:%s)" % (tsname, klname)
 
                     tsobj.set_kltransform(klname)
                     tsobj.generate_mmodes_kl()
@@ -204,7 +217,10 @@ class PipelineManager(config.Reader):
                     psname = ps['psname']
                     klname = ps['klname']
 
-                    print "Estimating powerspectra (%s:%s)" % (tsname, psname)
+                    if mpiutil.rank0:
+                        print
+                        print '=' * 80
+                        print "Estimating powerspectra (%s:%s)" % (tsname, psname)
 
                     tsobj.set_kltransform(klname)
                     tsobj.set_psestimator(psname)
@@ -223,6 +239,10 @@ class PipelineManager(config.Reader):
 
                     tsobj = self.timestreams[tsname]
 
+                    if mpiutil.rank0:
+                        print
+                        print '=' * 80
+                        print 'Estimating cross powerspectra (%s:%s)' % (tsname, psname)
                     tsobj.set_kltransform(klname)
                     tsobj.set_psestimator(klname)
 
@@ -238,7 +258,10 @@ class PipelineManager(config.Reader):
             for tsname, tsobj in self.timestreams.items():
 
                 for klname in self.klmaps:
-                    print "Generating KL map (%s:%s)" % (tsname, klname)
+                    if mpiutil.rank0:
+                        print
+                        print '=' * 80
+                        print "Generating KL map (%s:%s)" % (tsname, klname)
 
                     mapfile = 'map_%s.hdf5' % klname
 
@@ -250,7 +273,10 @@ class PipelineManager(config.Reader):
 
             for tsname, tsobj in self.timestreams.items():
 
-                print "Generating SVD map (%s)" % tsname
+                if mpiutil.rank0:
+                    print
+                    print '=' * 80
+                    print "Generating SVD map (%s)" % tsname
                 tsobj.mapmake_svd(self.nside, 'map_svd.hdf5', self.svdmap_fwhm, rank_ratio=self.svd_rank_ratio, lcut=self.svd_lcut)
 
 
@@ -258,11 +284,16 @@ class PipelineManager(config.Reader):
 
             for tsname, tsobj in self.timestreams.items():
 
-                print "Generating full map (%s)" % tsname
+                if mpiutil.rank0:
+                    print
+                    print '=' * 80
+                    print "Generating full map (%s)" % tsname
                 tsobj.mapmake_full(self.nside, 'map_full.hdf5', self.fullmap_fwhm, rank_ratio=self.full_rank_ratio, lcut=self.full_lcut)
 
 
         if mpiutil.rank0:
+            print
+            print
             print "========================================"
             print "=                                      ="
             print "=           DONE AT LAST!!             ="

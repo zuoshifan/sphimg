@@ -1021,7 +1021,7 @@ class BeamTransfer(object):
         lcut = max(lcut, mmax) # must l >= m
         lcut1 = lcut + 1
         lcut1 = min(lcut1, lside) # must have lcut <= lmax
-        if mpiutil.rank0:
+        if mpiutil.rank0 and mi == 0:
             print 'Cut l at %d for lmax = %d, mmax = %d.' % (lcut1-1, lside-1, mmax)
         # nsky = npol * (lside - mi) # 4 * (lmax + 1 - mi)
         nsky = npol * (lcut1 - mi) # 4 * (lcut + 1 - mi)
@@ -1364,7 +1364,7 @@ class BeamTransfer(object):
         lcut = max(lcut, mmax) # must l >= m
         lcut1 = lcut + 1
         lcut1 = min(lcut1, lside) # must have lcut <= lmax
-        if mpiutil.rank0:
+        if mpiutil.rank0 and mi == 0:
             print 'Cut l at %d for lmax = %d, mmax = %d.' % (lcut1-1, lside-1, mmax)
         # nsky = npol * (lside - mi) # 4 * (lmax + 1 - mi)
         beam = beam[..., mi:lcut1] # all zero for l < m
@@ -1390,7 +1390,7 @@ class BeamTransfer(object):
                     if rank > rank_ratio * lside:
                         vecf[fi, pi, mi:lcut1] = x
                     else:
-                        print 'Rank <= %.1f for m = %d, fi = %d...' % (rank_ratio*self.nsky, mi, fi)
+                        print ('Rank <= %.1f for m = %d, fi = %d, pol = {%d}...' % (rank_ratio*self.nsky, mi, fi, pi)).format('T', 'Q', 'U', 'V')
 
                 # lvec = vec[svbounds[fi]:svbounds[fi+1]] # Matrix section for this frequency
 
