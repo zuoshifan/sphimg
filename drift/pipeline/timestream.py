@@ -307,11 +307,11 @@ class Timestream(object):
                 print "******* svd-files already generated ********"
             return
 
-        completed_mlist = []
-        mlist_file = self._svddir + 'COMPLETED_SVDLIST'
-        if os.path.exists(mlist_file):
-            for mi in open(mlist_file, 'r'):
-                completed_mlist.append(int(mi))
+        # completed_mlist = []
+        # mlist_file = self._svddir + 'COMPLETED_SVDLIST'
+        # if os.path.exists(mlist_file):
+        #     for mi in open(mlist_file, 'r'):
+        #         completed_mlist.append(int(mi))
 
         # Iterate over local m's, project mode and save to disk.
         for mi in mpiutil.mpirange(self.telescope.mmax + 1):
@@ -323,8 +323,8 @@ class Timestream(object):
             except OSError:
                 pass
 
-            # if os.path.exists(self._svdfile(mi)):
-            if mi in completed_mlist:
+            if os.path.exists(self._svdfile(mi)):
+            # if mi in completed_mlist:
                 print "File %s exists. Skipping..." % self._svdfile(mi)
                 continue
 
@@ -334,8 +334,8 @@ class Timestream(object):
             with h5py.File(self._svdfile(mi), 'w') as f:
                 f.create_dataset('mmode_svd', data=svdm)
                 f.attrs['m'] = mi
-            with open(mlist_file, 'a') as f:
-                f.write('%d\n' % mi)
+            # with open(mlist_file, 'a') as f:
+            #     f.write('%d\n' % mi)
 
         if mpiutil.rank0:
 
@@ -506,11 +506,11 @@ class Timestream(object):
                 print "******* %s-files already generated ********" % self.klname
             return
 
-        completed_mlist = []
-        mlist_file = self._kldir + 'COMPLETED_%sLIST' % self.klname.upper()
-        if os.path.exists(mlist_file):
-            for mi in open(mlist_file, 'r'):
-                completed_mlist.append(int(mi))
+        # completed_mlist = []
+        # mlist_file = self._kldir + 'COMPLETED_%sLIST' % self.klname.upper()
+        # if os.path.exists(mlist_file):
+        #     for mi in open(mlist_file, 'r'):
+        #         completed_mlist.append(int(mi))
 
         # Iterate over local m's, project mode and save to disk.
         for mi in mpiutil.mpirange(self.telescope.mmax + 1):
@@ -522,8 +522,8 @@ class Timestream(object):
             except OSError:
                 pass
 
-            # if os.path.exists(self._klfile(mi)):
-            if mi in completed_mlist:
+            if os.path.exists(self._klfile(mi)):
+            # if mi in completed_mlist:
                 print "File %s exists. Skipping..." % self._klfile(mi)
                 continue
 
@@ -535,8 +535,8 @@ class Timestream(object):
             with h5py.File(self._klfile(mi), 'w') as f:
                 f.create_dataset('mmode_kl', data=klm)
                 f.attrs['m'] = mi
-            with open(mlist_file, 'a') as f:
-                f.write('%d\n' % mi)
+            # with open(mlist_file, 'a') as f:
+            #     f.write('%d\n' % mi)
 
         if mpiutil.rank0:
 
