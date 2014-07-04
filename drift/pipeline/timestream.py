@@ -1,4 +1,9 @@
-import pickle
+# import pickle
+try:
+   import cPickle as pickle
+except ImportError:
+   import pickle
+
 import os
 
 import h5py
@@ -295,7 +300,7 @@ class Timestream(object):
     def generate_mmodes_svd(self):
         """Generate the SVD modes for the Timestream.
         """
-        
+
         completed_file = self._svddir + 'COMPLETED_SVD'
         if os.path.exists(completed_file):
             if mpiutil.rank0:
@@ -1043,6 +1048,13 @@ def simulate(m, outdir, maps=[], ndays=None, resolution=0, seed=None, **kwargs):
             pass
 
         # Write file contents
+        with h5py.File(tstream._ffile(fi), 'w') as f:
+
+            # Timestream data
+            f.create_dataset('/timestream', data=vis_stream[:, lfi])
+
+    if mpiutil.rank0:
+        # Write common data
         with h5py.File(tstream._fcommondata_file, 'w') as f:
             f.create_dataset('/phi', data=tphi)
 
@@ -1056,13 +1068,6 @@ def simulate(m, outdir, maps=[], ndays=None, resolution=0, seed=None, **kwargs):
             # Write metadata
             f.attrs['beamtransfer_path'] = os.path.abspath(bt.directory)
             f.attrs['ntime'] = ntime
-
-        with h5py.File(tstream._ffile(fi), 'w') as f:
-
-            # Timestream data
-            f.create_dataset('/timestream', data=vis_stream[:, lfi])
-
-    if mpiutil.rank0:
 
         # Make file marker that the m's have been correctly generated:
         open(completed_file, 'a').close()
