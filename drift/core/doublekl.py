@@ -20,11 +20,12 @@ class DoubleKL(kltransform.KLTransform):
     """
 
     foreground_threshold = config.Property(proptype=float, default=100.0)
-    
+
     def _transform_m(self, mi):
 
-        inv = None
+        print "Solving for Eigenvalues...."
 
+        # Fetch the covariance matrices to diagonalise
         nside = self.beamtransfer.ndof(mi)
 
         # Ensure that number of SVD degrees of freedom is non-zero before proceeding
@@ -34,7 +35,7 @@ class DoubleKL(kltransform.KLTransform):
         # Construct S and F matrices and regularise foregrounds
         self.use_thermal = False
         cs, cn = [ cv.reshape(nside, nside) for cv in self.sn_covariance(mi) ]
-        
+
         # Find joint eigenbasis and transformation matrix
         evals, evecs2, ac = kltransform.eigh_gen(cs, cn)
         evecs = evecs2.T.conj()
@@ -46,6 +47,7 @@ class DoubleKL(kltransform.KLTransform):
         evextra = { 'ac' : ac, 'f_evals' : evals.copy() }
 
         # Construct inverse transformation if required
+        inv = None
         if self.inverse:
             inv = kltransform.inv_gen(evecs).T
 
@@ -53,6 +55,7 @@ class DoubleKL(kltransform.KLTransform):
         evals = evals[ind]
         evecs = evecs[ind]
         inv = inv[ind] if self.inverse else None
+        print "Modes with S/F > %f: %i of %i" % (self.foreground_threshold, evals.size, nside)
 
         if evals.size > 0:
             # Generate the full S and N covariances in the truncated basis
@@ -81,40 +84,33 @@ class DoubleKL(kltransform.KLTransform):
         f.create_dataset('f_evals', data=evextra['f_evals'])
 
 
-    def _collect(self):
-        
+    def _collect(self, regen=False):
+
+        if mpiutil.rank0:
+            if os.path.exists(self._all_evfile) and not regen:
+                print "File %s exists. Skipping..." % self._all_evfile
+                return
+            else:
+                print "Creating eigenvalues file for %s (process 0 only)." % self.klname
+
         def evfunc(mi):
-
-
             ta = np.zeros(shape, dtype=np.float64)
 
-            f = h5py.File(self._evfile % mi, 'r')
-
-            if f['evals_full'].shape[0] > 0:
-                ev = f['evals_full'][:]
-                fev = f['f_evals'][:]
-                ta[0, -ev.size:] = ev
-                ta[1, -fev.size:] = fev
-
-            f.close()
+            with h5py.File(self._evfile(mi), 'r') as f:
+                if f['evals_full'].shape[0] > 0:
+                    ev = f['evals_full'][:]
+                    fev = f['f_evals'][:]
+                    ta[0, -ev.size:] = ev
+                    ta[1, -fev.size:] = fev
 
             return ta
 
-        if mpiutil.rank0:
-            print "Creating eigenvalues file (process 0 only)."
-        
         mlist = range(self.telescope.mmax+1)
         shape = (2, self.beamtransfer.ndofmax)
-        
         evarray = kltransform.collect_m_array(mlist, evfunc, shape, np.float64)
-        
-        if mpiutil.rank0:
-            if os.path.exists(self.evdir + "/evals.hdf5"):
-                print "File: %s exists. Skipping..." % (self.evdir + "/evals.hdf5")
-                return
 
-            f = h5py.File(self.evdir + "/evals.hdf5", 'w')
-            f.create_dataset('evals', data=evarray[:, 0])
-            f.create_dataset('f_evals', data=evarray[:, 1])
-            f.close()
+        if mpiutil.rank0:
+            with h5py.File(self._all_evfile, 'w') as f:
+                f.create_dataset('evals', data=evarray[:, 0])
+                f.create_dataset('f_evals', data=evarray[:, 1])
 

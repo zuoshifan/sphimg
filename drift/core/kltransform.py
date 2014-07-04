@@ -46,7 +46,7 @@ def collect_m_arrays(mlist, func, shapes, dtype):
 def collect_m_array(mlist, func, shape, dtype):
 
     res = collect_m_arrays(mlist, lambda mi: [func(mi)], [shape], dtype)
-    
+
     return res[0] if mpiutil.rank0 else None
 
 
@@ -55,16 +55,16 @@ def collect_m_array(mlist, func, shape, dtype):
 def eigh_gen(A, B):
     """Solve the generalised eigenvalue problem. :math:`\mathbf{A} \mathbf{v} =
     \lambda \mathbf{B} \mathbf{v}`
-    
+
     This routine will attempt to correct for when `B` is not positive definite
     (usually due to numerical precision), by adding a constant diagonal to make
     all of its eigenvalues positive.
-    
+
     Parameters
     ----------
     A, B : np.ndarray
         Matrices to operate on.
-        
+
     Returns
     -------
     evals : np.ndarray
@@ -80,7 +80,7 @@ def eigh_gen(A, B):
         evals, evecs = np.zeros(A.shape[0], dtype=A.real.dtype), np.identity(A.shape[0], dtype=A.dtype)
 
     else:
-    
+
         try:
             evals, evecs = la.eigh(A, B, overwrite_a=True, overwrite_b=True)
         except la.LinAlgError as e:
@@ -121,7 +121,7 @@ def inv_gen(A):
     ----------
     A : np.ndarray
         Matrix to invert.
-        
+
     Returns
     -------
     inv : np.ndarray
@@ -166,27 +166,37 @@ class KLTransform(config.Reader):
 
     pol_length = config.Property(proptype=float, default=None)
 
-    evdir = ""
+    klname = None
+    # evdir = ""
 
     _cvfg = None
     _cvsg = None
 
     @property
-    def _evfile(self):
-        # Pattern to form the `m` ordered file.
-        return self.evdir + "/ev_m_" + util.natpattern(self.telescope.mmax) + ".hdf5"
-    
+    def _evdir(self):
+        return self.beamtransfer.directory + '/' + self.klname + '/'
 
-    def __init__(self, bt, subdir=None):
+    def _evfile(self, mi):
+        # Pattern to form the `m` ordered file.
+        # return self.evdir + "/ev_m_" + util.natpattern(self.telescope.mmax) + ".hdf5"
+        pat = self._evdir + 'ev_m_%s.hdf5' % util.natpattern(self.telescope.mmax)
+        return pat % abs(mi)
+
+    @property
+    def _all_evfile(self):
+        return self._evdir + 'evals.hdf5'
+
+    def __init__(self, bt, klname):
         self.beamtransfer = bt
         self.telescope = self.beamtransfer.telescope
 
-        subdir = "ev" if subdir is None else subdir
+        # subdir = "ev" if subdir is None else subdir
+        self.klname = klname
 
         # Create directory if required
-        self.evdir = self.beamtransfer.directory + "/" + subdir
-        if mpiutil.rank0 and not os.path.exists(self.evdir):
-            os.makedirs(self.evdir)
+        # self.evdir = self.beamtransfer.directory + "/" + klname
+        # if mpiutil.rank0 and not os.path.exists(self.evdir):
+        #     os.makedirs(self.evdir)
 
         # If we're part of an MPI run, synchronise here.
         mpiutil.barrier()
@@ -217,7 +227,7 @@ class KLTransform(config.Reader):
                 self._cvfg = skymodel.foreground_model(self.telescope.lmax,
                                                        self.telescope.frequencies,
                                                        npol, pol_frac=0.0)
-                
+
         return self._cvfg
 
 
@@ -228,14 +238,14 @@ class KLTransform(config.Reader):
         -------
         cv_fg : np.ndarray[pol2, pol1, l, freq1, freq2]
         """
-        
+
         if self._cvsg is None:
             npol = self.telescope.num_pol_sky
 
             if npol != 1 and npol != 3 and npol != 4:
                 raise Exception("Can only handle unpolarised only (num_pol_sky \
                                 = 1), or I, Q and U (num_pol_sky = 3).")
-        
+
             self._cvsg = skymodel.im21cm_model(self.telescope.lmax,
                                                self.telescope.frequencies, npol)
 
@@ -279,7 +289,7 @@ class KLTransform(config.Reader):
         nc = 1.0
         if not self.use_thermal:
             nc =  (1e-3 / self.telescope.tsys_flat)**2
-        
+
         # Construct diagonal noise power in telescope basis
         bl = np.arange(self.telescope.npairs)
         bl = np.concatenate((bl, bl))
@@ -306,7 +316,7 @@ class KLTransform(config.Reader):
             The KL-modes. The evals correspond to the diagonal of the
             covariances in the new basis, and the evecs define the basis.
         """
-        
+
         print "Solving for Eigenvalues...."
 
         # Fetch the covariance matrices to diagonalise
@@ -341,7 +351,7 @@ class KLTransform(config.Reader):
 
 
 
-    def transform_save(self, mi):
+    def _transform_save_m(self, mi):
         """Save the KL-modes for a given m.
 
         Perform the transform and cache the results for later use.
@@ -356,53 +366,106 @@ class KLTransform(config.Reader):
         evals, evecs : np.ndarray
             See `transfom_m` for details.
         """
-        
+
         # Perform the KL-transform
-        print "Constructing signal and noise covariances for m = %i ..." % (mi)
+        print "Constructing signal and noise covariances for m = %d ..." % mi
         evals, evecs, inv, evextra = self._transform_m(mi)
-    
+
         ## Write out Eigenvals and Vectors
 
         # Create file and set some metadata
-        print "Creating file %s ...." % (self._evfile % mi)
-        f = h5py.File(self._evfile % mi, 'w')
-        f.attrs['m'] = mi
-        f.attrs['SUBSET'] = self.subset
+        print "Creating file %s ...." % (self._evfile(mi))
+        with h5py.File(self._evfile(mi), 'w') as f:
+            f.attrs['m'] = mi
+            f.attrs['SUBSET'] = self.subset
 
-        ## If modes have been already truncated (e.g. DoubleKL) then pad out
-        ## with zeros at the lower end.
-        nside = self.beamtransfer.ndof(mi)
-        evalsf = np.zeros(nside, dtype=np.float64)
-        if evals.size != 0:
-            evalsf[(-evals.size):] = evals
-        f.create_dataset('evals_full', data=evalsf)
+            ## If modes have been already truncated (e.g. DoubleKL) then pad out
+            ## with zeros at the lower end.
+            nside = self.beamtransfer.ndof(mi)
+            evalsf = np.zeros(nside, dtype=np.float64)
+            if evals.size != 0:
+                evalsf[(-evals.size):] = evals
+            f.create_dataset('evals_full', data=evalsf)
 
-        # Discard eigenmodes with S/N below threshold if requested.
-        if self.subset:
-            i_ev = np.searchsorted(evals, self.threshold)
-            
-            evals = evals[i_ev:]
-            evecs = evecs[i_ev:]
-            print "Modes with S/N > %f: %i of %i" % (self.threshold, evals.size, evalsf.size)
-
-        # Write out potentially reduced eigen spectrum.
-        f.create_dataset('evals', data=evals)
-        f.create_dataset('evecs', data=evecs)
-        f.attrs['num_modes'] = evals.size
-
-        if self.inverse:
+            # Discard eigenmodes with S/N below threshold if requested.
             if self.subset:
-                inv = inv[i_ev:]
+                i_ev = np.searchsorted(evals, self.threshold)
 
-            f.create_dataset('evinv', data=inv)
-        
-        # Call hook which allows derived classes to save special information
-        # into the EV file.
-        self._ev_save_hook(f, evextra)
-                
-        f.close()
+                evals = evals[i_ev:]
+                evecs = evecs[i_ev:]
+                print "Modes with S/N > %f: %i of %i" % (self.threshold, evals.size, evalsf.size)
 
-        return evals, evecs
+            # Write out potentially reduced eigen spectrum.
+            f.create_dataset('evals', data=evals)
+            f.create_dataset('evecs', data=evecs)
+            f.attrs['num_modes'] = evals.size
+
+            if self.inverse:
+                if self.subset:
+                    inv = inv[i_ev:]
+
+                f.create_dataset('evinv', data=inv)
+
+            # Call hook which allows derived classes to save special information
+            # into the EV file.
+            self._ev_save_hook(f, evextra)
+
+        # f.close()
+
+        # return evals, evecs
+
+
+    def _transform_save(self, regen=False):
+        # Perform the KL-transform and save the KL-mode
+        completed_file = self._evdir + 'COMPLETED_EV'
+        if os.path.exists(completed_file) and not regen:
+            if mpiutil.rank0:
+                print
+                print '=' * 80
+                print "******* %s-files already generated ********" % self.klname
+            return
+
+        if mpiutil.rank0:
+            st = time.time()
+            print
+            print '=' * 80
+            print "======== Starting %s calculation ========" % self.klname
+
+        # completed_mlist = []
+        # mlist_file = self._evdir + 'COMPLETED_EVLIST'
+        # if os.path.exists(mlist_file):
+        #     for mi in open(mlist_file, 'r'):
+        #         completed_mlist.append(int(mi))
+
+        # Iterate list over MPI processes.
+        for mi in mpiutil.mpirange(self.telescope.mmax+1):
+            # Make directory for kl transform
+            try:
+                if not os.path.exists(self._evdir):
+                    os.makedirs(self._evdir)
+            except OSError:
+                pass
+
+            # if os.path.exists(self._evfile % mi) and not regen:
+            # if mi in completed_mlist and not regen:
+            if os.path.exists(self._evfile(mi)) and not regen:
+                print "File %s exists. Skipping..." % self._evfile(mi)
+                continue
+
+            self._transform_save_m(mi)
+            # with open(mlist_file, 'a') as f:
+            #     f.write('%d\n' % mi)
+
+        if mpiutil.rank0:
+            # Make file marker that the m's have been correctly generated:
+            open(completed_file, 'a').close()
+
+        # If we're part of an MPI run, synchronise here.
+        mpiutil.barrier()
+
+        if mpiutil.rank0:
+            et = time.time()
+            print "======== Ending %s calculation (time=%f) ========" % (self.klname, (et - st))
 
 
     def _ev_save_hook(self, f, evextra):
@@ -430,41 +493,40 @@ class KLTransform(config.Reader):
             The full set of eigenvalues across all m-modes.
         """
 
-        f = h5py.File(self.evdir + "/evals.hdf5", 'r')
-        ev = f['evals'][:]
-        f.close()
-        
+        # f = h5py.File(self.evdir + "/evals.hdf5", 'r')
+        with h5py.File(self._all_evfile, 'r') as f:
+            ev = f['evals'][:]
+        # f.close()
+
         return ev
 
 
-    def _collect(self):
+    def _collect(self, regen=False):
+
+        if mpiutil.rank0:
+            if os.path.exists(self._all_evfile) and not regen:
+                print "File %s exists. Skipping..." % self._all_evfile
+                return
+            else:
+                print "Creating eigenvalues file for %s (process 0 only)." % self.klname
 
         def evfunc(mi):
             evf = np.zeros(self.beamtransfer.ndofmax)
 
-            f = h5py.File(self._evfile % mi, 'r')
-            if f['evals_full'].shape[0] > 0:
-                ev = f['evals_full'][:]
-                evf[-ev.size:] = ev
-            f.close()
+            with h5py.File(self._evfile(mi), 'r') as f:
+                if f['evals_full'].shape[0] > 0:
+                    ev = f['evals_full'][:]
+                    evf[-ev.size:] = ev
 
             return evf
 
-        if mpiutil.rank0:
-            print "Creating eigenvalues file (process 0 only)."
-        
         mlist = range(self.telescope.mmax+1)
         shape = (self.beamtransfer.ndofmax, )
         evarray = collect_m_array(mlist, evfunc, shape, np.float64)
 
         if mpiutil.rank0:
-            if os.path.exists(self.evdir + "/evals.hdf5"):
-                print "File: %s exists. Skipping..." % (self.evdir + "/evals.hdf5")
-                return
-
-            f = h5py.File(self.evdir + "/evals.hdf5", 'w')
-            f.create_dataset('evals', data=evarray)
-            f.close()
+            with h5py.File(self._all_evfile, 'w') as f:
+                f.create_dataset('evals', data=evarray)
 
 
     def generate(self, regen=False):
@@ -477,31 +539,14 @@ class KLTransform(config.Reader):
         mlist : array_like, optional
             Set of m's to calculate KL-modes for By default do all m-modes.
         """
-        
-        if mpiutil.rank0:
-            st = time.time()
-            print "======== Starting KL calculation ========"
 
-        # Iterate list over MPI processes.
-        for mi in mpiutil.mpirange(self.telescope.mmax+1):
-            if os.path.exists(self._evfile % mi) and not regen:
-                print "m index %i. File: %s exists. Skipping..." % (mi, (self._evfile % mi))
-                continue
-
-            self.transform_save(mi)
-
-        # If we're part of an MPI run, synchronise here.
-        mpiutil.barrier()
-
-        if mpiutil.rank0:
-            et = time.time()
-            print "======== Ending KL calculation (time=%f) ========" % (et - st)
-
+        # Perform the KL-transform for all m-modes and save the result.
+        self._transform_save(regen)
 
         # Collect together the eigenvalues
-        self._collect()
+        self._collect(regen)
 
-        
+
 
     olddatafile = False
 
@@ -532,13 +577,14 @@ class KLTransform(config.Reader):
             are potentially `None`, if there are no modes either in the file, or
             satisfying S/N > threshold.
         """
-        
-        # If modes not already saved to disk, create file.
-        if not os.path.exists(self._evfile % mi):
-            modes = self.transform_save(mi)
-        else:
-            f = h5py.File(self._evfile % mi, 'r')
 
+        # If modes not already saved to disk, create file.
+        completed_file = self._evdir + 'COMPLETED_EV'
+        if not os.path.exists(completed_file):
+            # modes = self.transform_save(mi)
+            self._transfrom_save()
+
+        with h5py.File(self._evfile(mi), 'r') as f:
             # If no modes are in the file, return None, None
             if f['evals'].shape[0] == 0:
                 modes = None, None
@@ -551,10 +597,9 @@ class KLTransform(config.Reader):
                     modes = None, None
                 else:
                     modes = ( evals[startind:], f['evecs'][startind:] )
-                    
+
                     # If old data file perform complex conjugate
                     modes = modes if not self.olddatafile else ( modes[0], modes[1].conj() )
-            f.close()
 
         return modes
 
@@ -586,13 +631,13 @@ class KLTransform(config.Reader):
             are potentially `None`, if there are no modes either in the file, or
             satisfying S/N > threshold.
         """
-        
-        # If modes not already saved to disk, create file.
-        if not os.path.exists(self._evfile % mi):
-            modes = self.transform_save(mi)
-        else:
-            f = h5py.File(self._evfile % mi, 'r')
 
+        # If modes not already saved to disk, create file.
+        completed_file = self._evdir + 'COMPLETED_EV'
+        if not os.path.exists(completed_file):
+            self._transfrom_save()
+
+        with h5py.File(self._evfile(mi), 'r') as f:
             # If no modes are in the file, return None, None
             if f['evals'].shape[0] == 0:
                 modes = None
@@ -605,8 +650,6 @@ class KLTransform(config.Reader):
                     modes = None
                 else:
                     modes = evals[startind:]
-
-            f.close()
 
         return modes
 
@@ -631,7 +674,7 @@ class KLTransform(config.Reader):
 
         evals = self.evals_m(mi, threshold)
 
-        with h5py.File(self._evfile % mi, 'r') as f:
+        with h5py.File(self._evfile(mi), 'r') as f:
             if 'evinv' in f:
                 inv = f['evinv'][:]
 
@@ -672,7 +715,7 @@ class KLTransform(config.Reader):
         --------
         `modes_m`
         """
-        
+
         # Fetch the modes in the telescope basis.
         evals, evecs = self.modes_m(mi, threshold=threshold)
 
@@ -687,12 +730,12 @@ class KLTransform(config.Reader):
         evecs = evecs.reshape((-1, bt.nfreq, bt.ntel))
 
         evsky = np.zeros((evecs.shape[0], bt.nfreq, bt.nsky), dtype=np.complex128)
-        
+
         for fi in range(bt.nfreq):
             evsky[:, fi, :] = np.dot(evecs[:, fi, :], beam[fi])
 
         return evsky
-            
+
 
 
 
@@ -757,7 +800,7 @@ class KLTransform(config.Reader):
         invmodes = self.invmodes_m(mi, threshold)
 
         return np.dot(invmodes, vec)
- 
+
 
 
     def project_vector_sky_to_kl(self, mi, vec, threshold=None):
@@ -847,7 +890,7 @@ class KLTransform(config.Reader):
 
         evsky = self.skymodes_m(mi, threshold).reshape((-1, nfreq, npol, lside))
         et = time.time()
-        
+
         #print "Evsky: %f" % (et-st)
 
         st = time.time()
@@ -861,7 +904,7 @@ class KLTransform(config.Reader):
                     matf += np.dot(np.dot(ev1n[pi, li], mat[pi, pj, li]), ev1h[pj, li])
 
         et = time.time()
-        
+
         #print "Rest: %f" % (et-st)
 
 
@@ -875,7 +918,7 @@ class KLTransform(config.Reader):
         if mlist is None:
             mlist = range(self.telescope.mmax + 1)
         mpart = mpiutil.partition_list_mpi(mlist)
-        
+
         # Total number of sky modes.
         nmodes = self.beamtransfer.nfreq * self.beamtransfer.ntel
 
@@ -897,7 +940,7 @@ class KLTransform(config.Reader):
         proj_all = mpiutil.world.gather(proj_sec, root=0)
 
         proj_arr = None
-        
+
         if mpiutil.rank0:
             # Create array to put projections into
             proj_arr = np.zeros((2*self.telescope.mmax + 1, nmodes), dtype=np.complex128)
@@ -910,4 +953,3 @@ class KLTransform(config.Reader):
         # Return the projections (rank=0) or None elsewhere.
         return proj_arr
 
-            

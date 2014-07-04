@@ -64,6 +64,11 @@ def barrier():
         _comm.Barrier()
 
 
+def bcast(data, root=0):
+    if size > 1:
+        return _comm.bcast(data, root=0)
+
+
 def parallel_map(func, glist):
     """Apply a parallel map using MPI.
 

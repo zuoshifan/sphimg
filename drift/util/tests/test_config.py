@@ -1,6 +1,10 @@
 import unittest
 
-import pickle
+# import pickle
+try:
+   import cPickle as pickle
+except ImportError:
+   import pickle
 
 from drift.util import config
 

@@ -23,7 +23,7 @@ teltype_dict =  {   'UnpolarisedCylinder'   : cylinder.UnpolarisedCylinderTelesc
                     'FocalPlane'            : focalplane.FocalPlaneArray,
                     'RestrictedCylinder'    : restrictedcylinder.RestrictedCylinder,
                     'RestrictedPolarisedCylinder'    : restrictedcylinder.RestrictedPolarisedCylinder,
-                    'RestrictedExtra'       : restrictedcylinder.RestrictedExtra,                  
+                    'RestrictedExtra'       : restrictedcylinder.RestrictedExtra,
                     'GradientCylinder'       : exotic_cylinder.GradientCylinder,
                     'UnequalFeedsCylinder'  : exotic_cylinder.UnequalFeedsCylinder
                 }
@@ -40,7 +40,7 @@ kltype_dict =   {   'KLTransform'   : kltransform.KLTransform,
 pstype_dict =   {   'Full'          : psestimation.PSExact,
                     'MonteCarlo'    : psmc.PSMonteCarlo,
                     'MonteCarloAlt' : psmc.PSMonteCarloAlt,
-                    'Cross'         : crosspower.CrossPower                   
+                    'Cross'         : crosspower.CrossPower
                 }
 
 
@@ -139,8 +139,6 @@ class ProductManager(object):
 
 
 
-
-
     def load_config(self, configfile):
 
         with open(configfile) as f:
@@ -178,14 +176,12 @@ class ProductManager(object):
                 skymodel._reionisation = True
 
         ## Beam transfer generation
+        ## Don't do SVD if requested
         if 'nosvd' in yconf['config'] and yconf['config']['nosvd']:
-            self.beamtransfer = beamtransfer.BeamTransferNoSVD(self.directory + '/bt/', telescope=self.telescope)    
-        else:
-            self.beamtransfer = beamtransfer.BeamTransfer(self.directory + '/bt/', telescope=self.telescope)
-
+            self.beamtransfer = beamtransfer.BeamTransferNoSVD(self.directory + '/bt/', telescope=self.telescope)
         ## Use the full SVD if requested
-        if 'fullsvd' in yconf['config'] and yconf['config']['fullsvd']:
-            self.beamtransfer = beamtransfer.BeamTransferFullSVD(self.directory + '/bt/', telescope=self.telescope)    
+        elif 'fullsvd' in yconf['config'] and yconf['config']['fullsvd']:
+            self.beamtransfer = beamtransfer.BeamTransferFullSVD(self.directory + '/bt/', telescope=self.telescope)
         else:
             self.beamtransfer = beamtransfer.BeamTransfer(self.directory + '/bt/', telescope=self.telescope)
 
@@ -196,8 +192,6 @@ class ProductManager(object):
         ## Set the singular value cut for the *polarisation* beamtransfers
         if 'polsvcut' in yconf['config']:
             self.beamtransfer.polsvcut = float(yconf['config']['polsvcut'])
-
-
 
 
         if yconf['config']['beamtransfers']:
@@ -214,7 +208,7 @@ class ProductManager(object):
 
                 klclass = _resolve_class(kltype, kltype_dict, 'KL filter')
 
-                kl = klclass.from_config(klentry, self.beamtransfer, subdir=klname)
+                kl = klclass.from_config(klentry, self.beamtransfer, klname)
                 self.kltransforms[klname] = kl
 
         if yconf['config']['kltransform']:
@@ -235,7 +229,7 @@ class ProductManager(object):
                 pstype = psentry['type']
                 klname = psentry['klname']
                 psname = psentry['name'] if 'name' in psentry else 'ps'
-                
+
                 psclass = _resolve_class(pstype, pstype_dict, 'PS estimator')
 
                 if klname not in self.kltransforms:
@@ -266,6 +260,8 @@ class ProductManager(object):
                 psobj.delbands()
 
         if mpiutil.rank0:
+            print
+            print
             print "========================================"
             print "=                                      ="
             print "=           DONE AT LAST!!             ="
