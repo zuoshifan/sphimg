@@ -467,6 +467,8 @@ class KLTransform(config.Reader):
             et = time.time()
             print "======== Ending %s calculation (time=%f) ========" % (self.klname, (et - st))
 
+        mpiutil.barrier()
+
 
     def _ev_save_hook(self, f, evextra):
 
