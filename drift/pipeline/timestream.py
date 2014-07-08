@@ -80,7 +80,7 @@ class Timestream(object):
         self.directory = os.path.abspath(tsdir)
         self.output_directory = self.directory
         self.manager = prodmanager
-    
+
     #====================================================
 
 
@@ -559,7 +559,7 @@ class Timestream(object):
 
         if mpiutil.rank0:
             print "Creating eigenvalues file (process 0 only)."
-        
+
         mlist = range(self.telescope.mmax+1)
         shape = (self.beamtransfer.ndofmax, )
         evarray = kltransform.collect_m_array(mlist, evfunc, shape, np.complex128)
@@ -592,7 +592,7 @@ class Timestream(object):
             else:
                 modeamp = ((evals + 1.0) / 2.0)**0.5
                 klmode = modeamp * (np.array([1.0, 1.0J]) * np.random.standard_normal((modeamp.shape[0], 2))).sum(axis=1)
-            
+
 
             with h5py.File(self._klfile(mi), 'w') as f:
                 f.create_dataset('mmode_kl', data=klmode)
@@ -799,7 +799,7 @@ class Timestream(object):
 def cross_powerspectrum(timestreams, psname, psfile):
 
     import scipy.linalg as la
-    
+
     if os.path.exists(psfile):
         print "File %s exists. Skipping..." % psfile
         return
@@ -943,7 +943,7 @@ def simulate(m, outdir, maps=[], ndays=None, resolution=0, seed=None, **kwargs):
 
     ## If we want to add maps use the m-mode formalism to project a skymap
     ## into visibility space.
-    
+
     if projmaps:
 
         # Load file to find out the map shapes.
@@ -954,12 +954,12 @@ def simulate(m, outdir, maps=[], ndays=None, resolution=0, seed=None, **kwargs):
 
             # Allocate array to store the local frequencies
             row_map = np.zeros((lfreq,) + mapshape[1:], dtype=np.float64)
-            
+
             # Read in and sum up the local frequencies of the supplied maps.
             for mapfile in maps:
                 with h5py.File(mapfile, 'r') as f:
                     row_map += f['map'][sfreq:efreq]
-                    
+
             # Calculate the alm's for the local sections
             row_alm = hputil.sphtrans_sky(row_map, lmax=lmax).reshape((lfreq, npol * (lmax+1), lmax+1))
 
@@ -1002,7 +1002,7 @@ def simulate(m, outdir, maps=[], ndays=None, resolution=0, seed=None, **kwargs):
         del col_vis_tmp
 
     ## If we're simulating noise, create a realisation and add it to col_vis
-    if ndays > 0:
+    if ndays > 0 and lfreq > 0:
 
         # Fetch the noise powerspectrum
         noise_ps = tel.noisepower(np.arange(tel.npairs)[:, np.newaxis], np.array(local_freq)[np.newaxis, :], ndays=ndays).reshape(tel.npairs, lfreq)[:, :, np.newaxis]
@@ -1011,7 +1011,7 @@ def simulate(m, outdir, maps=[], ndays=None, resolution=0, seed=None, **kwargs):
         # Seed random number generator to give consistent noise
         if seed is not None:
             # Must include rank such that we don't have massive power deficit from correlated noise
-            np.random.seed(seed + mpiutil.rank) 
+            np.random.seed(seed + mpiutil.rank)
 
         # Create and weight complex noise coefficients
         noise_vis = (np.array([1.0, 1.0J]) * np.random.standard_normal(col_vis.shape + (2,))).sum(axis=-1)
@@ -1053,6 +1053,8 @@ def simulate(m, outdir, maps=[], ndays=None, resolution=0, seed=None, **kwargs):
             # Timestream data
             f.create_dataset('/timestream', data=vis_stream[:, lfi])
 
+    # mpiutil.barrier()
+
     if mpiutil.rank0:
         # Write common data
         with h5py.File(tstream._fcommondata_file, 'w') as f:
@@ -1077,7 +1079,3 @@ def simulate(m, outdir, maps=[], ndays=None, resolution=0, seed=None, **kwargs):
     mpiutil.barrier()
 
     return tstream
-
-
-
-
