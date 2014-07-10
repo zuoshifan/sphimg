@@ -1225,11 +1225,14 @@ class BeamTransfer(object):
         ## Calculate the number of SVD modes meeting the cut for each
         ## frequency, return the number and the array bounds
 
-        # Get the array of singular values for each mode
-        sv = self.beam_singularvalues(mi)
+        if self.svcut > 0.0:
+            # Get the array of singular values for each mode
+            sv = self.beam_singularvalues(mi)
 
-        # Number of significant sv modes at each frequency
-        svnum = (sv > sv.max() * self.svcut).sum(axis=1)
+            # Number of significant sv modes at each frequency
+            svnum = (sv > sv.max() * self.svcut).sum(axis=1)
+        else:
+            svnum = np.array([self.svd_len] * self.nfreq)
 
         # Calculate the block bounds within the full matrix
         svbounds = np.cumsum(np.insert(svnum, 0, 0))
@@ -1719,6 +1722,18 @@ class BeamTransferNoSVD(BeamTransfer):
 
     svcut = 0.0
 
+    def _generate_svdfiles(self, regen=False):
+       # Remove self._svddir if it is empty
+       try:
+          os.rmdir(self._svddir)
+       except OSError:
+          pass
+
+
+    def _collect_svd_spectrum(self, regen=False):
+        pass
+
+
     def project_matrix_sky_to_svd(self, mi, mat, *args, **kwargs):
         return self.project_matrix_sky_to_telescope(mi, mat).reshape(self.ndof(mi), self.ndof(mi))
 
@@ -1732,6 +1747,10 @@ class BeamTransferNoSVD(BeamTransfer):
 
     def project_vector_telescope_to_svd(self, mi, vec, *args, **kwargs):
         return vec
+
+    def project_vector_svd_to_sky(self, mi, vec, rank_ratio, lcut, temponly=False, conj=False):
+        return self.project_vector_telescope_to_sky(mi, vec, rank_ratio, lcut)
+
 
     def beam_svd(self, mi, *args, **kwargs):
         return self.beam_m(mi)
