@@ -584,7 +584,7 @@ class KLTransform(config.Reader):
         completed_file = self._evdir + 'COMPLETED_EV'
         if not os.path.exists(completed_file):
             # modes = self.transform_save(mi)
-            self._transfrom_save()
+            self._transform_save()
 
         with h5py.File(self._evfile(mi), 'r') as f:
             # If no modes are in the file, return None, None
@@ -637,7 +637,7 @@ class KLTransform(config.Reader):
         # If modes not already saved to disk, create file.
         completed_file = self._evdir + 'COMPLETED_EV'
         if not os.path.exists(completed_file):
-            self._transfrom_save()
+            self._transform_save()
 
         with h5py.File(self._evfile(mi), 'r') as f:
             # If no modes are in the file, return None, None
