@@ -79,9 +79,10 @@ class ProductManager(object):
     directory = None
 
     gen_beams = False
+    gen_svd = False
     gen_kl = False
     gen_ps = False
-    gen_proj = False
+    # gen_proj = False
 
 
     @classmethod
@@ -175,15 +176,22 @@ class ProductManager(object):
             if yconf['config']['reionisation']:
                 skymodel._reionisation = True
 
+        ## Determin wether to do SVD projection
+        if 'svdproj' in yconf['config'] and not yconf['config']['svdproj']:
+            self.gen_svd = False
+
         ## Beam transfer generation
         ## Don't do SVD if requested
         if 'nosvd' in yconf['config'] and yconf['config']['nosvd']:
-            self.beamtransfer = beamtransfer.BeamTransferNoSVD(self.directory + '/bt/', telescope=self.telescope)
+            if self.gen_svd and mpiutil.rank0:
+                print 'You choose to use class BeamTransferNoSVD, so no SVD projection will be done.'
+            self.gen_svd = False
+            self.beamtransfer = beamtransfer.BeamTransferNoSVD(self.directory + '/bt/', telescope=self.telescope, svdproj=self.gen_svd)
         ## Use the full SVD if requested
         elif 'fullsvd' in yconf['config'] and yconf['config']['fullsvd']:
-            self.beamtransfer = beamtransfer.BeamTransferFullSVD(self.directory + '/bt/', telescope=self.telescope)
+            self.beamtransfer = beamtransfer.BeamTransferFullSVD(self.directory + '/bt/', telescope=self.telescope, svdproj=self.gen_svd)
         else:
-            self.beamtransfer = beamtransfer.BeamTransfer(self.directory + '/bt/', telescope=self.telescope)
+            self.beamtransfer = beamtransfer.BeamTransfer(self.directory + '/bt/', telescope=self.telescope, svdproj=self.gen_svd)
 
         ## Set the singular value cut for the beamtransfers
         if 'svcut' in yconf['config']:
