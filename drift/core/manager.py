@@ -179,6 +179,8 @@ class ProductManager(object):
         ## Determin wether to do SVD projection
         if 'svdproj' in yconf['config'] and not yconf['config']['svdproj']:
             self.gen_svd = False
+        else:
+            self.gen_svd = True
 
         ## Beam transfer generation
         ## Don't do SVD if requested
