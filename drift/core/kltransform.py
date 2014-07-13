@@ -9,6 +9,7 @@ import h5py
 from cora.util import hputil
 
 from drift.util import mpiutil, util, config
+from drift.util import typeutil
 from drift.core import skymodel
 
 
@@ -156,15 +157,15 @@ class KLTransform(config.Reader):
     subset = config.Property(proptype=bool, default=True, key='subset')
     inverse = config.Property(proptype=bool, default=False, key='inverse')
 
-    threshold = config.Property(proptype=float, default=0.1, key='threshold')
+    threshold = config.Property(proptype=typeutil.nonnegative_float, default=0.1, key='threshold')
 
-    _foreground_regulariser = config.Property(proptype=float, default=1e-14, key='regulariser')
+    _foreground_regulariser = config.Property(proptype=typeutil.nonnegative_float, default=1e-14, key='regulariser')
 
     use_thermal = config.Property(proptype=bool, default=True)
     use_foregrounds = config.Property(proptype=bool, default=True)
     use_polarised = config.Property(proptype=bool, default=True)
 
-    pol_length = config.Property(proptype=float, default=None)
+    pol_length = config.Property(proptype=typeutil.none_or_positive_float, default=None)
 
     klname = None
     # evdir = ""

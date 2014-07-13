@@ -6,6 +6,7 @@ from cora.util import hputil, units
 
 from drift.core import visibility
 from drift.util import util, config
+from drift.util import typeutil
 
 
 def in_range(arr, min, max):
@@ -160,18 +161,18 @@ class TransitTelescope(config.Reader):
 
     zenith = config.Property(proptype=latlon_to_sphpol, default=[45.0, 0.0])
 
-    freq_lower = config.Property(proptype=float, default=400.0)
-    freq_upper = config.Property(proptype=float, default=800.0)
-    num_freq = config.Property(proptype=int, default=50)
+    freq_lower = config.Property(proptype=typeutil.nonnegative_float, default=400.0)
+    freq_upper = config.Property(proptype=typeutil.nonnegative_float, default=800.0)
+    num_freq = config.Property(proptype=typeutil.positive_int, default=50)
 
-    tsys_flat = config.Property(proptype=float, default=50.0, key='tsys')
-    ndays = config.Property(proptype=int, default=733)
+    tsys_flat = config.Property(proptype=typeutil.nonnegative_float, default=50.0, key='tsys')
+    ndays = config.Property(proptype=typeutil.positive_int, default=733)
 
-    accuracy_boost = config.Property(proptype=float, default=1.0)
-    l_boost = config.Property(proptype=float, default=1.0)
+    accuracy_boost = config.Property(proptype=typeutil.positive_float, default=1.0)
+    l_boost = config.Property(proptype=typeutil.positive_float, default=1.0)
 
-    minlength = config.Property(proptype=float, default=0.0)
-    maxlength = config.Property(proptype=float, default=1.0e7)
+    minlength = config.Property(proptype=typeutil.nonnegative_float, default=0.0)
+    maxlength = config.Property(proptype=typeutil.nonnegative_float, default=1.0e7)
 
     auto_correlations = config.Property(proptype=bool, default=False)
 

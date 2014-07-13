@@ -3,6 +3,7 @@ import numpy as np
 from drift.core import telescope
 from drift.telescope import cylinder, cylbeam
 from drift.util import config
+from drift.util import typeutil
 
 
 class RandomCylinder(cylinder.UnpolarisedCylinderTelescope):
@@ -42,7 +43,7 @@ class GradientCylinder(cylinder.UnpolarisedCylinderTelescope):
         a = self.wavelengths[-1] / 2.0 if self.min_spacing < 0.0 else self.min_spacing
         #b = 2 * (sp - a) / nf
         b = 2.0*(self.max_spacing - a * (nf-1)) / (nf-1)**2.0
-        
+
         pos = np.empty([nf, 2], dtype=np.float64)
 
         i = np.arange(nf)
@@ -79,10 +80,10 @@ class CylinderExtra(cylinder.UnpolarisedCylinderTelescope):
 
 class CylinderPerturbed(cylinder.PolarisedCylinderTelescope):
     """A base for a polarised telescope.
-    
+
     Again, an abstract class, but the only things that require implementing are
     the `feedpositions`, `_get_unique` and the beam functions `beamx` and `beamy`.
-    
+
     Abstract Methods
     ----------------
     beamx, beamy : methods
@@ -110,7 +111,7 @@ class CylinderPerturbed(cylinder.PolarisedCylinderTelescope):
 
     def beamx(self, feed, freq):
         """Beam for the x polarisation feed.
-        
+
         Parameters
         ----------
         feed : integer
@@ -122,7 +123,7 @@ class CylinderPerturbed(cylinder.PolarisedCylinderTelescope):
         -------
         beam : np.ndarray
             Healpix maps (of size [self._nside, 2]) of the field pattern in the
-            theta and phi directions.         
+            theta and phi directions.
         """
         beampert = int(self.beamclass[feed] / 2)
 
@@ -133,10 +134,10 @@ class CylinderPerturbed(cylinder.PolarisedCylinderTelescope):
 
         elif beampert == 1:
 
-            beam0 = cylbeam.beam_x(self._angpos, self.zenith, 
+            beam0 = cylbeam.beam_x(self._angpos, self.zenith,
                 self.cylinder_width / self.wavelengths[freq], self.fwhm_e, self.fwhm_h)
 
-            beam1 = cylbeam.beam_x(self._angpos, self.zenith, 
+            beam1 = cylbeam.beam_x(self._angpos, self.zenith,
                 self.cylinder_width / self.wavelengths[freq], self.fwhm_e * 1.01, self.fwhm_h)
 
             dbeam = (beam1 - beam0) / (0.01 * self.fwhm_e)
@@ -146,7 +147,7 @@ class CylinderPerturbed(cylinder.PolarisedCylinderTelescope):
 
     def beamy(self, feed, freq):
         """Beam for the x polarisation feed.
-        
+
         Parameters
         ----------
         feed : integer
@@ -158,7 +159,7 @@ class CylinderPerturbed(cylinder.PolarisedCylinderTelescope):
         -------
         beam : np.ndarray
             Healpix maps (of size [self._nside, 2]) of the field pattern in the
-            theta and phi directions.         
+            theta and phi directions.
         """
 
         beampert = int(self.beamclass[feed] / 2)
@@ -170,10 +171,10 @@ class CylinderPerturbed(cylinder.PolarisedCylinderTelescope):
 
         elif beampert == 1:
 
-            beam0 = cylbeam.beam_y(self._angpos, self.zenith, 
+            beam0 = cylbeam.beam_y(self._angpos, self.zenith,
                 self.cylinder_width / self.wavelengths[freq], self.fwhm_e, self.fwhm_h)
 
-            beam1 = cylbeam.beam_y(self._angpos, self.zenith, 
+            beam1 = cylbeam.beam_y(self._angpos, self.zenith,
                 self.cylinder_width / self.wavelengths[freq], self.fwhm_e * 1.01, self.fwhm_h)
 
             dbeam = (beam1 - beam0) / (0.01 * self.fwhm_e)
@@ -210,10 +211,10 @@ class UnequalFeedsCylinder(cylinder.PolarisedCylinderTelescope):
     A class for multiple side by side placed cylinders, each may have different number of equal spacing feeds.
     """
 
-    num_cylinders = config.Property(proptype=int, default=3)
-    num_feeds = config.Property(proptype=list, default=[31, 32, 33])
-    feed_spacing = config.Property(proptype=list, default=[15.5/30, 0.5, 15.5/31])
-    cylinder_width = config.Property(proptype=float, default=15.0)
+    num_cylinders = config.Property(proptype=typeutil.positive_int, default=3)
+    num_feeds = config.Property(proptype=typeutil.positive_int_or_non_empty_list, default=[31, 32, 33])
+    feed_spacing = config.Property(proptype=typeutil.positive_float_or_non_empty_list, default=[15.5/30, 0.5, 15.5/31])
+    cylinder_width = config.Property(proptype=typeutil.positive_float, default=15.0)
 
 
     def feed_positions_cylinder(self, cylinder_index):
@@ -223,7 +224,7 @@ class UnequalFeedsCylinder(cylinder.PolarisedCylinderTelescope):
         ----------
         cylinder_index : integer
             The cylinder index, an integer from 0 to self.num_cylinders.
-            
+
         Returns
         -------
         feed_positions : np.ndarray
@@ -235,8 +236,9 @@ class UnequalFeedsCylinder(cylinder.PolarisedCylinderTelescope):
             raise Exception("Cylinder index is invalid.")
 
         ncyl = self.num_cylinders
-        if len(self.num_feeds) == 1 and len(self.feed_spacing) == 1:
+        if len(self.num_feeds) == 1:
             self.num_feeds *= ncyl
+        if len(self.feed_spacing) == 1:
             self.feed_spacing *= ncyl
 
         if len(self.num_feeds) != ncyl and len(self.feed_spacing) != ncyl:
@@ -254,4 +256,3 @@ class UnequalFeedsCylinder(cylinder.PolarisedCylinderTelescope):
         pos[:, 1] = np.arange(nf) * sp
 
         return pos
-

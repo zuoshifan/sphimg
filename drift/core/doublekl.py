@@ -5,6 +5,7 @@ import h5py
 
 from drift.core import kltransform
 from drift.util import mpiutil, config
+from drift.util import typeutil
 
 
 class DoubleKL(kltransform.KLTransform):
@@ -19,7 +20,7 @@ class DoubleKL(kltransform.KLTransform):
         contaminated.
     """
 
-    foreground_threshold = config.Property(proptype=float, default=100.0)
+    foreground_threshold = config.Property(proptype=typeutil.nonnegative_float, default=100.0)
 
     def _transform_m(self, mi):
 

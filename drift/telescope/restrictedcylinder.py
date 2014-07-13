@@ -2,6 +2,7 @@ import numpy as np
 
 from drift.telescope import cylinder
 from drift.util import util, config
+from drift.util import typeutil
 
 def gaussian_fwhm(x, fwhm):
 
@@ -14,7 +15,7 @@ def gaussian_fwhm(x, fwhm):
 
 class RestrictedBeam(cylinder.CylinderTelescope):
 
-    beam_height = config.Property(proptype=float, default=30.0)
+    beam_height = config.Property(proptype=typeutil.nonnegative_float, default=30.0)
     beam_type = config.Property(proptype=str, default='box')
 
 

@@ -5,6 +5,7 @@ from scipy.special import jn
 from cora.util import coord, units
 from drift.core import telescope
 from drift.util import util, config
+from drift.util import typeutil
 
 
 def jinc(x):
@@ -45,15 +46,15 @@ def gaussian_beam(angpos, pointing, fwhm):
 class FocalPlaneArray(telescope.UnpolarisedTelescope):
 
 
-    beam_num_u = config.Property(proptype=int, default=10)
-    beam_num_v = config.Property(proptype=int, default=10)
+    beam_num_u = config.Property(proptype=typeutil.positive_int, default=10)
+    beam_num_v = config.Property(proptype=typeutil.positive_int, default=10)
 
 
-    beam_spacing_u = config.Property(proptype=float, default=0.1)
-    beam_spacing_v = config.Property(proptype=float, default=0.1)
+    beam_spacing_u = config.Property(proptype=typeutil.positive_float, default=0.1)
+    beam_spacing_v = config.Property(proptype=typeutil.positive_float, default=0.1)
 
-    beam_size = config.Property(proptype=float, default=0.1)
-    beam_pivot = config.Property(proptype=float, default=400.0)
+    beam_size = config.Property(proptype=typeutil.positive_float, default=0.1)
+    beam_pivot = config.Property(proptype=typeutil.positive_float, default=400.0)
 
     beam_freq_scale = config.Property(proptype=bool, default=True)
 

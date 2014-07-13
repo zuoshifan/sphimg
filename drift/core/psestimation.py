@@ -13,6 +13,7 @@ from cora.signal import corr21cm
 
 from drift.core import skymodel
 from drift.util import mpiutil, util, config
+from drift.util import typeutil
 
 from mpi4py import MPI
 
@@ -175,13 +176,13 @@ class PSEstimation(config.Reader):
 
     # Properties to control polar bands
     k_bands = config.Property(proptype=range_config, default=[ {'spacing' : 'linear', 'start' : 0.0, 'stop' : 0.4, 'num' : 20 }])
-    num_theta = config.Property(proptype=int, default=1)
+    num_theta = config.Property(proptype=typeutil.positive_int, default=1)
 
     # Properties for cartesian bands
     kpar_bands = config.Property(proptype=range_config, default=[ {'spacing' : 'linear', 'start' : 0.0, 'stop' : 0.4, 'num' : 20 }])
     kperp_bands = config.Property(proptype=range_config, default=[ {'spacing' : 'linear', 'start' : 0.0, 'stop' : 0.4, 'num' : 20 }])
 
-    threshold = config.Property(proptype=float, default=0.0)
+    threshold = config.Property(proptype=typeutil.nonnegative_float, default=0.0)
 
     unit_bands = config.Property(proptype=bool, default=True)
 

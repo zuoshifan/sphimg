@@ -5,13 +5,9 @@ import yaml
 from drift.util import mpiutil
 from drift.core import manager
 from drift.util import config
+from drift.util import typeutil
 from drift.pipeline import timestream
 
-
-def none_or_int(val):
-    if val is not None:
-        val = int(val)
-    return val
 
 def fixpath(path):
     """Fix up path (expanding variables etc.)"""
@@ -76,15 +72,15 @@ class PipelineManager(config.Reader):
     crosspower = []
 
     # Specific map-making options
-    fullmap_fwhm = config.Property(proptype=float, default=0.0)
-    svdmap_fwhm = config.Property(proptype=float, default=0.0)
-    full_rank_ratio = config.Property(proptype=float, default=0.0)
-    svd_rank_ratio = config.Property(proptype=float, default=0.0)
-    kl_rank_ratio = config.Property(proptype=float, default=0.0)
-    full_lcut = config.Property(proptype=none_or_int, default=None)
-    svd_lcut = config.Property(proptype=none_or_int, default=None)
-    kl_lcut = config.Property(proptype=none_or_int, default=None)
-    nside = config.Property(proptype=int, default=128)
+    fullmap_fwhm = config.Property(proptype=typeutil.nonnegative_float, default=0.0)
+    svdmap_fwhm = config.Property(proptype=typeutil.nonnegative_float, default=0.0)
+    full_rank_ratio = config.Property(proptype=typeutil.nonnegative_float, default=0.0)
+    svd_rank_ratio = config.Property(proptype=typeutil.nonnegative_float, default=0.0)
+    kl_rank_ratio = config.Property(proptype=typeutil.nonnegative_float, default=0.0)
+    full_lcut = config.Property(proptype=typeutil.none_or_natural_int, default=None)
+    svd_lcut = config.Property(proptype=typeutil.none_or_natural_int, default=None)
+    kl_lcut = config.Property(proptype=typeutil.none_or_natural_int, default=None)
+    nside = config.Property(proptype=typeutil.power_of_2, default=128)
     wiener = config.Property(proptype=bool, default=False)
 
     timestreams = {}

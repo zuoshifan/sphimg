@@ -5,6 +5,7 @@ from cora.util import coord
 
 from drift.core import telescope, visibility
 from drift.util import util, config
+from drift.util import typeutil
 
 
 
@@ -30,16 +31,16 @@ class CylinderTelescope(telescope.TransitTelescope):
         If not `touching` this is the spacing in metres.
     """
 
-    num_cylinders = config.Property(proptype=int, default=2)
-    num_feeds = config.Property(proptype=int, default=6)
+    num_cylinders = config.Property(proptype=typeutil.positive_int, default=2)
+    num_feeds = config.Property(proptype=typeutil.positive_int, default=6)
 
-    cylinder_width = config.Property(proptype=float, default=20.0)
-    feed_spacing = config.Property(proptype=float, default=0.5)
+    cylinder_width = config.Property(proptype=typeutil.positive_float, default=20.0)
+    feed_spacing = config.Property(proptype=typeutil.positive_float, default=0.5)
 
     in_cylinder = config.Property(proptype=bool, default=True)
 
     touching = config.Property(proptype=bool, default=True)
-    cylspacing = config.Property(proptype=float, default=0.0)
+    cylspacing = config.Property(proptype=typeutil.nonnegative_float, default=0.0)
 
     non_commensurate = config.Property(proptype=bool, default=False)
 

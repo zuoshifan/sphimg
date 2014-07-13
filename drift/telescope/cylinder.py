@@ -3,6 +3,7 @@ import numpy as np
 
 from drift.core import telescope
 from drift.util import config
+from drift.util import typeutil
 from drift.telescope import cylbeam
 
 
@@ -29,21 +30,21 @@ class CylinderTelescope(telescope.TransitTelescope):
         If not `touching` this is the spacing in metres.
     """
 
-    num_cylinders = config.Property(proptype=int, default=2)
-    num_feeds = config.Property(proptype=int, default=6)
+    num_cylinders = config.Property(proptype=typeutil.positive_int, default=2)
+    num_feeds = config.Property(proptype=typeutil.positive_int, default=6)
 
-    cylinder_width = config.Property(proptype=float, default=20.0)
-    feed_spacing = config.Property(proptype=float, default=0.5)
+    cylinder_width = config.Property(proptype=typeutil.positive_float, default=20.0)
+    feed_spacing = config.Property(proptype=typeutil.positive_float, default=0.5)
 
     in_cylinder = config.Property(proptype=bool, default=True)
 
     touching = config.Property(proptype=bool, default=True)
-    cylspacing = config.Property(proptype=float, default=0.0)
+    cylspacing = config.Property(proptype=typeutil.nonnegative_float, default=0.0)
 
     non_commensurate = config.Property(proptype=bool, default=False)
 
-    e_width = config.Property(proptype=float, default=0.7)  # ~ factor of 0.675 from dipole model
-    h_width = config.Property(proptype=float, default=1.0)
+    e_width = config.Property(proptype=typeutil.positive_float, default=0.7)  # ~ factor of 0.675 from dipole model
+    h_width = config.Property(proptype=typeutil.positive_float, default=1.0)
 
     # Fiducial widths
     _fwhm_e = 2.0 * np.pi / 3.0  # Factor of 0.675 from dipole model

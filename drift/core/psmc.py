@@ -4,6 +4,7 @@ from cora.util import nputil
 
 from drift.core import psestimation
 from drift.util import config, mpiutil
+from drift.util import typeutil
 
 
 class PSMonteCarlo(psestimation.PSEstimation):
@@ -20,7 +21,7 @@ class PSMonteCarlo(psestimation.PSEstimation):
         The number of samples to draw from each band.
     """
     
-    nsamples = config.Property(proptype=int, default=500)
+    nsamples = config.Property(proptype=typeutil.positive_int, default=500)
 
 
     def gen_sample(self, mi, nsamples=None, noiseonly=False):
@@ -110,8 +111,8 @@ class PSMonteCarloAlt(psestimation.PSEstimation):
         The number of samples to draw from each band.
     """
     
-    nsamples = config.Property(proptype=int, default=500)
-    nswitch = config.Property(proptype=int, default=0) #200
+    nsamples = config.Property(proptype=typeutil.positive_int, default=500)
+    nswitch = config.Property(proptype=typeutil.natural_int, default=0) #200
 
 
     def gen_vecs(self, mi):
