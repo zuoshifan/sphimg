@@ -183,26 +183,52 @@ class CylinderPerturbed(cylinder.PolarisedCylinderTelescope):
 
 
 
-class CylinderShift(cylinder.UnpolarisedCylinderTelescope):
+class UnpolarisedCylinderShift(cylinder.UnpolarisedCylinderTelescope):
 
-    shift = config.Property(proptype=float, default=0.0)
+    shift = config.Property(proptype=typeutil.float_or_non_empty_list, default=0.0)
 
 
     def feed_positions_cylinder(self, cylinder_index):
 
-        pos = super(CylinderExtra, self).feed_positions_cylinder(cylinder_index)
+        if cylinder_index >= self.num_cylinders or cylinder_index < 0:
+            raise Exception("Cylinder index is invalid.")
+
+        ncyl = self.num_cylinders
+        if len(self.shift) == 1:
+            self.shift *= ncyl
+        if len(self.shift) != ncyl:
+            raise Exception('Invalid shifts.')
+
+        pos = super(UnpolarisedCylinderShift, self).feed_positions_cylinder(cylinder_index)
+        v_shift = np.ones_like(pos)
+        v_shift[:, 0] = 0.0 # u-direction doesn't change
+        pos += self.shift[cylinder_index] * v_shift
+
+        return pos
 
 
-        nextra = self.extra_feeds.shape[0]
+class PolarisedCylinderShift(cylinder.PolarisedCylinderTelescope):
 
-        pos2 = np.zeros((pos.shape[0] + nextra, 2), dtype=np.float64)
+    shift = config.Property(proptype=typeutil.float_or_non_empty_list, default=0.0)
 
-        pos2[nextra:] = pos
 
-        pos2[:nextra, 0] = cylinder_index * self.cylinder_spacing
-        pos2[:nextra, 1] = self.extra_feeds
+    def feed_positions_cylinder(self, cylinder_index):
 
-        return pos2
+        if cylinder_index >= self.num_cylinders or cylinder_index < 0:
+            raise Exception("Cylinder index is invalid.")
+
+        ncyl = self.num_cylinders
+        if len(self.shift) == 1:
+            self.shift *= ncyl
+        if len(self.shift) != ncyl:
+            raise Exception('Invalid shifts.')
+
+        pos = super(PolarisedCylinderShift, self).feed_positions_cylinder(cylinder_index)
+        v_shift = np.ones_like(pos)
+        v_shift[:, 0] = 0.0 # u-direction doesn't change
+        pos += self.shift[cylinder_index] * v_shift
+
+        return pos
 
 
 class UnequalFeedsCylinder(cylinder.PolarisedCylinderTelescope):
@@ -238,11 +264,13 @@ class UnequalFeedsCylinder(cylinder.PolarisedCylinderTelescope):
         ncyl = self.num_cylinders
         if len(self.num_feeds) == 1:
             self.num_feeds *= ncyl
+        if len(self.num_feeds) != ncyl:
+            raise Exception('Invalid num_feeds.')
+
         if len(self.feed_spacing) == 1:
             self.feed_spacing *= ncyl
-
-        if len(self.num_feeds) != ncyl and len(self.feed_spacing) != ncyl:
-            raise Exception('Invalid num_feeds or feed_spacing.')
+        if len(self.feed_spacing) != ncyl:
+            raise Exception('Invalid feed_spacings.')
 
         nf = self.num_feeds[cylinder_index]
         sp = self.feed_spacing[cylinder_index]
