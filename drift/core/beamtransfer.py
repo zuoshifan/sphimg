@@ -1504,7 +1504,7 @@ class BeamTransfer(object):
                     if rank > rank_ratio * lside:
                         vecf[fi, pi, mi:lcut1] = x
                     else:
-                        print ('Rank <= %.1f for m = %d, fi = %d, pol = {%d}...' % (rank_ratio*self.nsky, mi, fi, pi)).format('T', 'Q', 'U', 'V')
+                        print ('Rank <= %.1f for m = %d, fi = %d, pol = {%d}...' % (rank_ratio*lside, mi, fi, pi)).format('T', 'Q', 'U', 'V')
 
                 # lvec = vec[svbounds[fi]:svbounds[fi+1]] # Matrix section for this frequency
 
