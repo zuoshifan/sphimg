@@ -488,7 +488,7 @@ class PSEstimation(config.Reader):
         # Write out all the PS estimation products
         if mpiutil.rank0:
             et = time.time()
-            print "======== Ending PS(%s:%s) calculation (time=%f) ========" % (self.kltrans.klname, self.psname, (et - st))
+            print "======== Ending PS (%s:%s) calculation (time=%f) ========" % (self.kltrans.klname, self.psname, (et - st))
 
             # Check to see ensure that Fisher matrix isn't all zeros.
             if not (self.fisher == 0).all():
