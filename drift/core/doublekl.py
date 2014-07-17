@@ -87,12 +87,14 @@ class DoubleKL(kltransform.KLTransform):
 
     def _collect(self, regen=False):
 
-        if mpiutil.rank0:
-            if os.path.exists(self._all_evfile) and not regen:
+        if os.path.exists(self._all_evfile) and not regen:
+            if mpiutil.rank0:
                 print "File %s exists. Skipping..." % self._all_evfile
-                return
-            else:
-                print "Creating eigenvalues file for %s (process 0 only)." % self.klname
+            mpiutil.barrier()
+            return
+
+        if mpiutil.rank0:
+            print "Creating eigenvalues file for %s (process 0 only)." % self.klname
 
         def evfunc(mi):
             ta = np.zeros(shape, dtype=np.float64)

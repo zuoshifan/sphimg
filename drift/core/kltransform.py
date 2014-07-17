@@ -424,6 +424,7 @@ class KLTransform(config.Reader):
                 print
                 print '=' * 80
                 print "******* %s-files already generated ********" % self.klname
+            mpiutil.barrier()
             return
 
         if mpiutil.rank0:
@@ -506,12 +507,14 @@ class KLTransform(config.Reader):
 
     def _collect(self, regen=False):
 
-        if mpiutil.rank0:
-            if os.path.exists(self._all_evfile) and not regen:
+        if os.path.exists(self._all_evfile) and not regen:
+            if mpiutil.rank0:
                 print "File %s exists. Skipping..." % self._all_evfile
-                return
-            else:
-                print "Creating eigenvalues file for %s (process 0 only)." % self.klname
+            mpiutil.barrier()
+            return
+
+        if mpiutil.rank0:
+            print "Creating eigenvalues file for %s..." % self.klname
 
         def evfunc(mi):
             evf = np.zeros(self.beamtransfer.ndofmax)
@@ -531,6 +534,8 @@ class KLTransform(config.Reader):
             with h5py.File(self._all_evfile, 'w') as f:
                 f.create_dataset('evals', data=evarray)
 
+        mpiutil.barrier()
+
 
     def generate(self, regen=False):
         """Perform the KL-transform for all m-modes and save the result.
@@ -548,6 +553,8 @@ class KLTransform(config.Reader):
 
         # Collect together the eigenvalues
         self._collect(regen)
+
+        # mpiutil.barrier()
 
 
 
@@ -635,26 +642,28 @@ class KLTransform(config.Reader):
             satisfying S/N > threshold.
         """
 
-        # If modes not already saved to disk, create file.
-        completed_file = self._evdir + 'COMPLETED_EV'
-        if not os.path.exists(completed_file):
-            self._transform_save()
+        # # If modes not already saved to disk, create file.
+        # completed_file = self._evdir + 'COMPLETED_EV'
+        # if not os.path.exists(completed_file):
+        #     self._transform_save()
 
-        with h5py.File(self._evfile(mi), 'r') as f:
-            # If no modes are in the file, return None, None
-            if f['evals'].shape[0] == 0:
-                modes = None
-            else:
-                # Find modes satisfying threshold (if required).
-                evals = f['evals'][:]
-                startind = np.searchsorted(evals, threshold) if threshold is not None else 0
+        # with h5py.File(self._evfile(mi), 'r') as f:
+        #     # If no modes are in the file, return None, None
+        #     if f['evals'].shape[0] == 0:
+        #         modes = None
+        #     else:
+        #         # Find modes satisfying threshold (if required).
+        #         evals = f['evals'][:]
+        #         startind = np.searchsorted(evals, threshold) if threshold is not None else 0
 
-                if startind == evals.size:
-                    modes = None
-                else:
-                    modes = evals[startind:]
+        #         if startind == evals.size:
+        #             modes = None
+        #         else:
+        #             modes = evals[startind:]
 
-        return modes
+        # return modes
+
+        return self.modes_m(mi, threshold)[0]
 
     @util.cache_last
     def invmodes_m(self, mi, threshold=None):

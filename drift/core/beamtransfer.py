@@ -729,6 +729,7 @@ class BeamTransfer(object):
                 print
                 print '=' * 80
                 print "******* m-files already generated ********"
+            mpiutil.barrier()
             return
 
         st = time.time()
@@ -858,6 +859,7 @@ class BeamTransfer(object):
                 print
                 print '=' * 80
                 print "******* svd-files already generated ********"
+            mpiutil.barrier()
             return
 
         # completed_mlist = []
@@ -1028,6 +1030,7 @@ class BeamTransfer(object):
                 print
                 print '=' * 80
                 print "File %s exists. Skipping..." % self._svdspectrum_file
+            mpiutil.barrier()
             return
 
 
@@ -1437,6 +1440,45 @@ class BeamTransfer(object):
         return vecf
 
 
+    def project_vector_svd_conj(self, mi, vec, temponly=False):
+        """Project a vector by conjugate SVD beam matrix.
+
+        Parameters
+        ----------
+        mi : integer
+            Mode index to fetch for.
+        vec : np.ndarray
+            Sky data vector packed as [nfreq, lmax+1]
+        temponly: boolean
+            Force projection of temperature part only (default: False)
+
+        Returns
+        -------
+        svec : np.ndarray
+            SVD vector to return.
+        """
+        npol = 1 if temponly else self.telescope.num_pol_sky
+
+        svnum, svbounds = self._svd_num(mi)
+
+        # Get the SVD beam matrix
+        beam = self.beam_svd(mi)
+
+        # Create the output matrix
+        vecf = np.zeros((self.nfreq, self.telescope.num_pol_sky, self.telescope.lmax + 1,) + vec.shape[1:], dtype=np.complex128)
+
+        for pi in range(npol):
+            for fi in self._svd_freq_iter(mi):
+
+                fbeam = beam[fi, :svnum[fi], pi, :].T.conj() # Beam matrix for this frequency and cut
+
+                lvec = vec[svbounds[fi]:svbounds[fi+1]] # Matrix section for this frequency
+
+                vecf[fi, pi] += np.dot(fbeam, lvec)
+
+        return vecf
+
+
     def project_vector_svd_to_sky(self, mi, vec, rank_ratio, lcut, temponly=False, conj=False):
         """Project a vector from the the sky into the SVD basis.
 
@@ -1492,7 +1534,7 @@ class BeamTransfer(object):
                 lvec = vec[svbounds[fi]:svbounds[fi+1]] # Matrix section for this frequency
                 if conj:
                     fbeam = beam[fi, :svnum[fi], pi, :].T.conj() # Beam matrix for this frequency and cut
-                    vecf[fi, pi] += np.dot(fbeam, lvec)
+                    vecf[fi, pi, mi:lcut1] += np.dot(fbeam, lvec)
                 else:
                     # fbeam = beam[fi, pi, :, :svnum[fi]] # Beam matrix for this frequency and cut
                     fbeam = beam[fi, :svnum[fi], pi, :]

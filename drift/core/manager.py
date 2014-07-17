@@ -247,7 +247,7 @@ class ProductManager(object):
                     warnings.warn('Desired KL object (name: %s) does not exist.' % klname)
                     self.psestimators[psname] = None
                 else:
-                    self.psestimators[psname] = psclass.from_config(psentry, self.kltransforms[klname], subdir=psname)
+                    self.psestimators[psname] = psclass.from_config(psentry, self.kltransforms[klname], psname=psname)
 
 
 
@@ -268,7 +268,7 @@ class ProductManager(object):
 
             for psname, psobj in self.psestimators.items():
                 psobj.generate()
-                psobj.delbands()
+                # psobj.delbands()
 
         if mpiutil.rank0:
             print
