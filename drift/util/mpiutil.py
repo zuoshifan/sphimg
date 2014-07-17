@@ -9,6 +9,9 @@ _comm = None
 world = None
 rank0 = True
 
+IN_PLACE = None
+DOUBLE = None
+
 ## Try to setup MPI and get the comm, rank and size.
 ## If not they should end up as rank=0, size=1.
 try:
@@ -16,24 +19,27 @@ try:
 
     _comm = MPI.COMM_WORLD
     world = _comm
-    
+
     rank = _comm.Get_rank()
     size = _comm.Get_size()
+
+    IN_PLACE = MPI.IN_PLACE
+    DOUBLE = MPI.DOUBLE
 
     if rank:
         print "MPI process %i of %i." % (rank, size)
 
     rank0 = True if rank == 0 else False
 
-    sys_excepthook = sys.excepthook 
-    
-    def mpi_excepthook(type, value, traceback): 
-        sys_excepthook(type, value, traceback) 
+    sys_excepthook = sys.excepthook
+
+    def mpi_excepthook(type, value, traceback):
+        sys_excepthook(type, value, traceback)
         MPI.COMM_WORLD.Abort(1)
 
-    sys.excepthook = mpi_excepthook 
-    
-    
+    sys.excepthook = mpi_excepthook
+
+
 except ImportError:
     warnings.warn("Warning: mpi4py not installed.")
 
@@ -52,7 +58,7 @@ def mpirange(*args):
     """An MPI aware version of `range`, each process gets its own sub section.
     """
     full_list = range(*args)
-    
+
     #if alternate:
     return partition_list_alternate(full_list, rank, size)
     #else:
@@ -67,6 +73,11 @@ def barrier():
 def bcast(data, root=0):
     if size > 1:
         return _comm.bcast(data, root=0)
+
+
+def Allgatherv(sendbuf, recvbuf):
+    if size > 1:
+        return _comm.Allgatherv(sendbuf, recvbuf)
 
 
 def parallel_map(func, glist):
@@ -198,7 +209,7 @@ def split_all(n, comm=None):
     `split_all`, `split_local`
     """
     m = size if comm is None else comm.size
-    
+
     return split_m(n, m)
 
 
@@ -229,7 +240,7 @@ def split_local(n, comm=None):
     """
     pse = split_all(n, comm=comm)
     m = rank if comm is None else comm.rank
-    
+
     return pse[:, m]
 
 
@@ -289,13 +300,13 @@ def transpose_blocks(row_array, shape, comm=None):
 
     # Iterate over all processes row wise
     for ir in range(comm.size):
-                
+
         # Get the start and end of each set of rows
         sir, eir = sar[ir], ear[ir]
 
         # Iterate over all processes column wise
         for ic in range(comm.size):
-                    
+
             # Get the start and end of each set of columns
             sic, eic = sac[ic], eac[ic]
 
@@ -474,5 +485,3 @@ def parallel_rows_write_hdf5(fname, dsetname, local_data, shape, comm=None):
     nc = np.prod(shape[1:])
 
     lock_and_write_buffer(local_data, fname, offset + sr * nc, lr * nc)
-
-

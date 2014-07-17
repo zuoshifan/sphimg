@@ -15,7 +15,7 @@ from drift.core import skymodel
 from drift.util import mpiutil, util, config
 from drift.util import typeutil
 
-from mpi4py import MPI
+# from mpi4py import MPI
 
 
 
@@ -369,7 +369,6 @@ class PSEstimation(config.Reader):
         self.clarray = np.zeros((self.nbands, self.telescope.lmax + 1,
                                  self.telescope.nfreq, self.telescope.nfreq), dtype=np.float64)
 
-        print 'Process %d make_cl for %d to %d.' % (mpiutil.rank, s, e)
         for bi in range(s, e):
             self.clarray[bi] = self.make_clzz(self.band_pk[bi])
 
@@ -377,7 +376,8 @@ class PSEstimation(config.Reader):
         sizes = p_bands * bandsize
         displ = s_bands * bandsize
 
-        MPI.COMM_WORLD.Allgatherv(MPI.IN_PLACE, [self.clarray, sizes, displ, MPI.DOUBLE])
+        # MPI.COMM_WORLD.Allgatherv(MPI.IN_PLACE, [self.clarray, sizes, displ, MPI.DOUBLE])
+        mpiutil.Allgatherv(mpiutil.IN_PLACE, [self.clarray, sizes, displ, mpiutil.DOUBLE])
 
 
     def delbands(self):
