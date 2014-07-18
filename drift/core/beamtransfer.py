@@ -600,8 +600,10 @@ class BeamTransfer(object):
 
         # Save pickled telescope object
         if mpiutil.rank0:
+            print
+            print '=' * 80
+            print "=== Saving Telescope object. ==="
             with open(self._picklefile, 'w') as f:
-                print "=== Saving Telescope object. ==="
                 pickle.dump(self.telescope, f)
 
         # If we're part of an MPI run, synchronise here.
@@ -728,9 +730,14 @@ class BeamTransfer(object):
             if mpiutil.rank0:
                 print
                 print '=' * 80
-                print "******* m-files already generated ********"
+                print "******* Beam transfer m-files already generated ********"
             mpiutil.barrier()
             return
+
+        if mpiutil.rank0:
+            print
+            print '=' * 80
+            print 'Create beam transfer m-files...'
 
         st = time.time()
 
@@ -858,7 +865,7 @@ class BeamTransfer(object):
             if mpiutil.rank0:
                 print
                 print '=' * 80
-                print "******* svd-files already generated ********"
+                print "******* Beam transfer svd-files already generated ********"
             mpiutil.barrier()
             return
 
@@ -869,6 +876,11 @@ class BeamTransfer(object):
         #         completed_mlist.append(int(mi))
         # mlist_file = mpiutil.bcast(mlist_file, root=0)
         # print 'size(mlist_flie) = %d for %d.' % (len(mlist_file), mpiutil.rank)
+
+        if mpiutil.rank0:
+            print
+            print '=' * 80
+            print 'Create beam transfer svd-files...'
 
         # Data shape for writing the SVD beam matrix into.
         dsize_bsvd = (self.telescope.nfreq, self.svd_len, self.telescope.num_pol_sky, self.telescope.lmax+1)
@@ -893,8 +905,8 @@ class BeamTransfer(object):
             if os.path.exists(self._svdfile(mi)) and not regen:
                 print "File %s exists. Skipping..." % self._svdfile(mi)
                 continue
-            else:
-                print 'Creating SVD file: %s' % self._svdfile(mi)
+            # else:
+            #     print 'Creating SVD file: %s' % self._svdfile(mi)
 
             # Open m beams for reading.
             # fm = h5py.File(self._mfile(mi), 'r')

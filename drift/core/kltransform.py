@@ -439,6 +439,8 @@ class KLTransform(config.Reader):
         #     for mi in open(mlist_file, 'r'):
         #         completed_mlist.append(int(mi))
 
+        mpiutil.barrier()
+
         # Iterate list over MPI processes.
         for mi in mpiutil.mpirange(self.telescope.mmax+1):
             # Make directory for kl transform
@@ -509,11 +511,15 @@ class KLTransform(config.Reader):
 
         if os.path.exists(self._all_evfile) and not regen:
             if mpiutil.rank0:
+                print
+                print '=' * 80
                 print "File %s exists. Skipping..." % self._all_evfile
             mpiutil.barrier()
             return
 
         if mpiutil.rank0:
+            print
+            print '=' * 80
             print "Creating eigenvalues file for %s..." % self.klname
 
         def evfunc(mi):

@@ -458,10 +458,13 @@ class PSEstimation(config.Reader):
 
         if os.path.exists(self._psfile) and not regen:
             if mpiutil.rank0:
+                print
+                print '=' * 80
                 print ("Fisher matrix file: %s exists. Skipping..." % self._psfile)
+            mpiutil.barrier()
             return
 
-        mpiutil.barrier()
+        # mpiutil.barrier()
 
         if mpiutil.rank0:
             st = time.time()
@@ -540,7 +543,7 @@ class PSEstimation(config.Reader):
 
             # f.close()
 
-            # mpiutil.barrier() # No need for the program ends here
+        mpiutil.barrier()
 
     #===================================================
 
