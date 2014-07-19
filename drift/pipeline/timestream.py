@@ -67,7 +67,7 @@ class Timestream(object):
 
     #============ Constructor etc. =====================
 
-    def __init__(self, tsdir, prodmanager):
+    def __init__(self, tsdir, tsname, prodmanager):
         """Create a new Timestream object.
 
         Parameters
@@ -79,6 +79,7 @@ class Timestream(object):
         """
         self.directory = os.path.abspath(tsdir)
         self.output_directory = self.directory
+        self.tsname = tsname
         self.manager = prodmanager
 
     #====================================================
@@ -133,7 +134,6 @@ class Timestream(object):
     def ntime(self):
         """Get the number of timesamples."""
 
-        # with h5py.File(self._ffile(0), 'r') as f:
         with h5py.File(self._fcommondata_file, 'r') as f:
             ntime = f.attrs['ntime']
 
@@ -202,12 +202,12 @@ class Timestream(object):
         Perform an MPI transpose for efficiency.
         """
 
-
         # if os.path.exists(self.output_directory + "/mmodes/COMPLETED_M"):
         completed_file = self._mdir + 'COMPLETED_M'
         if os.path.exists(completed_file):
             if mpiutil.rank0:
                 print "******* m-files already generated ********"
+            mpiutil.barrier()
             return
 
         tel = self.telescope
@@ -305,6 +305,7 @@ class Timestream(object):
         if os.path.exists(completed_file):
             if mpiutil.rank0:
                 print "******* svd-files already generated ********"
+            mpiutil.barrier()
             return
 
         # completed_mlist = []
@@ -361,6 +362,7 @@ class Timestream(object):
         if os.path.exists(mapfile):
             if mpiutil.rank0:
                 print "File %s exists. Skipping..." % mapfile
+            mpiutil.barrier()
             return
 
         def _make_alm(mi):
@@ -407,6 +409,7 @@ class Timestream(object):
         if os.path.exists(mapfile):
             if mpiutil.rank0:
                 print "File %s exists. Skipping..." % mapfile
+            mpiutil.barrier()
             return
 
         self.generate_mmodes_svd()
@@ -452,7 +455,7 @@ class Timestream(object):
 
     #========== Project into KL-mode basis ==============
 
-    def set_kltransform(self, klname, threshold=None, foreground_threshold=None):
+    def set_kltransform(self, klname, threshold=None):
 
         self.klname = klname
         kl = self.manager.kltransforms[self.klname]
@@ -462,13 +465,12 @@ class Timestream(object):
             threshold = kl.threshold
         self.klthreshold = threshold
 
-        if foreground_threshold is None:
-            try:
-                foreground_threshold = kl.foreground_threshold
-            except AttributeError:
-                pass
+        try:
+            self.foreground_threshold = kl.foreground_threshold
+        except AttributeError:
+            self.foreground_threshold = None
 
-        self.foreground_threshold = foreground_threshold
+        # self.foreground_threshold = foreground_threshold
 
 
     @property
@@ -482,8 +484,15 @@ class Timestream(object):
     def _klfile(self, mi):
         # Pattern to form the `m` ordered file.
         # return self._mdir(mi) + ('/klmode_%s_%f.hdf5' % (self.klname, self.klthreshold))
-        pat = self._kldir + '%smode_%s.hdf5' % (self.klname, util.natpattern(self.telescope.mmax))
+        pat = self._kldir + '%s_mode_%s.hdf5' % (self.klname, util.natpattern(self.telescope.mmax))
         return pat % (mi)
+
+    @property
+    def _klmodes_file(self):
+        if self.foreground_threshold is None:
+            return os.path.abspath(os.path.join(self._kldir, os.pardir)) + '/%s_modes_%f.hdf5' % (self.klname, self.klthreshold)
+        else:
+            return os.path.abspath(os.path.join(self._kldir, os.pardir)) + '/%s_modes_%f_%f.hdf5' % (self.klname, self.klthreshold, self.foreground_threshold)
 
 
     def mmode_kl(self, mi):
@@ -504,6 +513,7 @@ class Timestream(object):
         if os.path.exists(completed_file):
             if mpiutil.rank0:
                 print "******* %s-files already generated ********" % self.klname
+            mpiutil.barrier()
             return
 
         # completed_mlist = []
@@ -548,6 +558,14 @@ class Timestream(object):
 
     def collect_mmodes_kl(self):
 
+        if os.path.exists(self._klmodes_file):
+            if mpiutil.rank0:
+                print
+                print '=' * 80
+                print "File: %s exists. Skipping..." % self._klmodes_file
+            mpiutil.barrier()
+            return
+
         def evfunc(mi):
             evf = np.zeros(self.beamtransfer.ndofmax, dtype=np.complex128)
 
@@ -557,8 +575,8 @@ class Timestream(object):
 
             return evf
 
-        if mpiutil.rank0:
-            print "Creating eigenvalues file (process 0 only)."
+        # if mpiutil.rank0:
+        #     print "Creating eigenvalues file."
 
         mlist = range(self.telescope.mmax+1)
         shape = (self.beamtransfer.ndofmax, )
@@ -566,16 +584,21 @@ class Timestream(object):
 
         if mpiutil.rank0:
             # fname =  self.output_directory + ("/klmodes_%s_%f.hdf5"% (self.klname, self.klthreshold))
-            if self.foreground_threshold is None:
-                fname = os.path.abspath(os.path.join(self._kldir, os.pardir)) + '/%smodes_%f.hdf5' % (self.klname, self.klthreshold)
-            else:
-                fname = os.path.abspath(os.path.join(self._kldir, os.pardir)) + '/%smodes_%f_%f.hdf5' % (self.klname, self.klthreshold, self.foreground_threshold)
-            if os.path.exists(fname):
-                print "File: %s exists. Skipping..." % (fname)
-                return
+            # if self.foreground_threshold is None:
+            #     fname = os.path.abspath(os.path.join(self._kldir, os.pardir)) + '/%smodes_%f.hdf5' % (self.klname, self.klthreshold)
+            # else:
+            #     fname = os.path.abspath(os.path.join(self._kldir, os.pardir)) + '/%smodes_%f_%f.hdf5' % (self.klname, self.klthreshold, self.foreground_threshold)
+            # if os.path.exists(fname):
+            #     print "File: %s exists. Skipping..." % (fname)
+            #     return
 
-            with h5py.File(fname, 'w') as f:
+            print
+            print '=' * 80
+            print "Creating all kl-modes file %s..." % self._klmodes_file
+            with h5py.File(self._klmodes_file, 'w') as f:
                 f.create_dataset('evals', data=evarray)
+
+        mpiutil.barrier()
 
 
     def fake_kl_data(self):
@@ -609,6 +632,7 @@ class Timestream(object):
         if os.path.exists(mapfile):
             if mpiutil.rank0:
                 print "File %s exists. Skipping..." % mapfile
+            mpiutil.barrier()
             return
 
         kl = self.manager.kltransforms[self.klname]
@@ -769,10 +793,19 @@ class Timestream(object):
         """Save out the Timestream object information."""
 
         # Save pickled telescope object
-        if mpiutil.rank0:
-            with open(self._picklefile, 'w') as f:
-                print "=== Saving Timestream object. ==="
-                pickle.dump(self, f)
+        print
+        print '=' * 80
+        print "Saving Timestream object %s..." % self.tsname
+        with open(self._picklefile, 'w') as f:
+            pickle.dump(self, f)
+        # if mpiutil.rank0:
+        #     print
+        #     print '=' * 80
+        #     print "=== Saving Timestream object. ==="
+        #     with open(self._picklefile, 'w') as f:
+        #         pickle.dump(self, f)
+
+        # mpiutil.barrier()
 
 
     @classmethod
@@ -877,7 +910,7 @@ def cross_powerspectrum(timestreams, psname, psfile):
 
 
 # kwargs is to absorb any extra params
-def simulate(m, outdir, maps=[], ndays=None, resolution=0, seed=None, **kwargs):
+def simulate(m, outdir, tsname, maps=[], ndays=None, resolution=0, seed=None, **kwargs):
     """Create a simulated timestream and save it to disk.
 
     Parameters
@@ -902,12 +935,13 @@ def simulate(m, outdir, maps=[], ndays=None, resolution=0, seed=None, **kwargs):
     """
 
     # Create timestream object
-    tstream = Timestream(outdir, m)
+    tstream = Timestream(outdir, tsname, m)
 
     completed_file = tstream._fdir + 'COMPLETED_TIMESTREAM'
     if os.path.exists(completed_file):
         if mpiutil.rank0:
             print "******* timestream-files already generated ********"
+        mpiutil.barrier()
         return
 
     ## Read in telescope system
@@ -966,6 +1000,8 @@ def simulate(m, outdir, maps=[], ndays=None, resolution=0, seed=None, **kwargs):
         else:
             row_alm = np.zeros((lfreq, npol * (lmax+1), lmax+1), dtype=np.complex128)
 
+        # mpiutil.barrier()
+
         # Perform the transposition to distribute different m's across processes. Neat
         # tip, putting a shorter value for the number of columns, trims the array at
         # the same time
@@ -981,6 +1017,8 @@ def simulate(m, outdir, maps=[], ndays=None, resolution=0, seed=None, **kwargs):
         # visibilities
         for mp, mi in enumerate(range(sm, em)):
             vis_data[mp] = bt.project_vector_sky_to_telescope(mi, col_alm[mp])
+
+        # mpiutil.barrier()
 
         # Rearrange axes such that frequency is last (as we want to divide
         # frequencies across processors)
@@ -1056,6 +1094,9 @@ def simulate(m, outdir, maps=[], ndays=None, resolution=0, seed=None, **kwargs):
     # mpiutil.barrier()
 
     if mpiutil.rank0:
+        print
+        print '=' * 80
+        print 'Creating time stream %s common data file %s...' % (tstream.tsname, tstream._fcommondata_file)
         # Write common data
         with h5py.File(tstream._fcommondata_file, 'w') as f:
             f.create_dataset('/phi', data=tphi)
@@ -1074,7 +1115,7 @@ def simulate(m, outdir, maps=[], ndays=None, resolution=0, seed=None, **kwargs):
         # Make file marker that the m's have been correctly generated:
         open(completed_file, 'a').close()
 
-    tstream.save()
+        tstream.save()
 
     mpiutil.barrier()
 

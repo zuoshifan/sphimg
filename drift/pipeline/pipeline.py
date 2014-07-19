@@ -125,7 +125,7 @@ class PipelineManager(config.Reader):
             # Load ProductManager and Timestream
             if self.prodmanager is None:
                 self.prodmanager = manager.ProductManager.from_config(self.product_directory)
-            ts = timestream.Timestream(tsdir, self.prodmanager)
+            ts = timestream.Timestream(tsdir, name, self.prodmanager)
 
             if 'output_directory' in tsconf:
                 outdir = fixpath(tsconf['output_directory'])
@@ -160,7 +160,7 @@ class PipelineManager(config.Reader):
             # else:
                 # m = manager.ProductManager.from_config(simconf['product_directory'])
                 # timestream.simulate(m, ts.directory, **simconf)
-            timestream.simulate(self.prodmanager, ts.directory, **simconf)
+            timestream.simulate(self.prodmanager, ts.directory, tsname, **simconf)
 
 
 
@@ -173,7 +173,7 @@ class PipelineManager(config.Reader):
                 if mpiutil.rank0:
                     print
                     print '=' * 80
-                    print "Generating m-modes (%s)" % tsname
+                    print "Generating m-modes (%s)..." % tsname
 
                 tsobj.generate_mmodes()
 
@@ -183,7 +183,7 @@ class PipelineManager(config.Reader):
                 if mpiutil.rank0:
                     print
                     print '=' * 80
-                    print "Generating svd modes (%s)" % tsname
+                    print "Generating svd modes (%s)..." % tsname
 
                 tsobj.generate_mmodes_svd()
 
@@ -195,7 +195,7 @@ class PipelineManager(config.Reader):
                     if mpiutil.rank0:
                         print
                         print '=' * 80
-                        print "Generating KL filter (%s:%s)" % (tsname, klname)
+                        print "Generating KL filter (%s:%s)..." % (tsname, klname)
 
                     tsobj.set_kltransform(klname)
                     tsobj.generate_mmodes_kl()
@@ -216,7 +216,7 @@ class PipelineManager(config.Reader):
                     if mpiutil.rank0:
                         print
                         print '=' * 80
-                        print "Estimating powerspectra (%s:%s)" % (tsname, psname)
+                        print "Estimating powerspectra (%s:%s)..." % (tsname, psname)
 
                     tsobj.set_kltransform(klname)
                     tsobj.set_psestimator(psname)
@@ -238,7 +238,7 @@ class PipelineManager(config.Reader):
                     if mpiutil.rank0:
                         print
                         print '=' * 80
-                        print 'Estimating cross powerspectra (%s:%s)' % (tsname, psname)
+                        print 'Estimating cross powerspectra (%s:%s)...' % (tsname, psname)
                     tsobj.set_kltransform(klname)
                     tsobj.set_psestimator(klname)
 
@@ -257,7 +257,7 @@ class PipelineManager(config.Reader):
                     if mpiutil.rank0:
                         print
                         print '=' * 80
-                        print "Generating KL map (%s:%s)" % (tsname, klname)
+                        print "Generating KL map (%s:%s)..." % (tsname, klname)
 
                     mapfile = 'map_%s.hdf5' % klname
 
@@ -272,7 +272,7 @@ class PipelineManager(config.Reader):
                 if mpiutil.rank0:
                     print
                     print '=' * 80
-                    print "Generating SVD map (%s)" % tsname
+                    print "Generating SVD map (%s)..." % tsname
                 tsobj.mapmake_svd(self.nside, 'map_svd.hdf5', self.svdmap_fwhm, rank_ratio=self.svd_rank_ratio, lcut=self.svd_lcut)
 
 
@@ -283,7 +283,7 @@ class PipelineManager(config.Reader):
                 if mpiutil.rank0:
                     print
                     print '=' * 80
-                    print "Generating full map (%s)" % tsname
+                    print "Generating full map (%s)..." % tsname
                 tsobj.mapmake_full(self.nside, 'map_full.hdf5', self.fullmap_fwhm, rank_ratio=self.full_rank_ratio, lcut=self.full_lcut)
 
 
