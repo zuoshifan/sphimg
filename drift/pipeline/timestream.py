@@ -5,6 +5,7 @@ except ImportError:
    import pickle
 
 import os
+import shutil
 
 import h5py
 import healpy
@@ -705,11 +706,13 @@ class Timestream(object):
 
     def powerspectrum(self):
 
-        import scipy.linalg as la
-
         if os.path.exists(self._psfile):
-            print "File %s exists. Skipping..." % self._psfile
+            if mpiutil.rank0:
+                print "File %s exists. Skipping..." % self._psfile
+            mpiutil.barrier()
             return
+
+        import scipy.linalg as la
 
         ps = self.manager.psestimators[self.psname]
         ps.genbands()
@@ -721,6 +724,9 @@ class Timestream(object):
         # Determine whether to use m=0 or not
         mlist = range(1 if self.no_m_zero else 0, self.telescope.mmax + 1)
         qvals = mpiutil.parallel_map(_q_estimate, mlist)
+
+        # Delete cache of bands for memory reasons
+        ps.delbands()
 
         qtotal = np.array(qvals).sum(axis=0)
 
@@ -734,34 +740,36 @@ class Timestream(object):
             if not os.path.exists(self._psdir):
                 os.makedirs(self._psdir)
 
-            with h5py.File(self._psfile, 'w') as f:
+            # copy ps file from product directory
+            shutil.copyfile(ps._psfile, self._psfile)
 
+            with h5py.File(self._psfile, 'a') as f:
 
-                cv = la.inv(fisher)
-                err = cv.diagonal()**0.5
-                cr = cv / np.outer(err, err)
+#                 cv = la.inv(fisher)
+#                 err = cv.diagonal()**0.5
+#                 cr = cv / np.outer(err, err)
 
-                f.create_dataset('fisher/', data=fisher)
-#                f.create_dataset('bias/', data=self.bias)
-                f.create_dataset('covariance/', data=cv)
-                f.create_dataset('error/', data=err)
-                f.create_dataset('correlation/', data=cr)
+#                 f.create_dataset('fisher/', data=fisher)
+# #                f.create_dataset('bias/', data=self.bias)
+#                 f.create_dataset('covariance/', data=cv)
+#                 f.create_dataset('error/', data=err)
+#                 f.create_dataset('correlation/', data=cr)
 
-                f.create_dataset('bandpower/', data=ps.band_power)
-                #f.create_dataset('k_start/', data=ps.k_start)
-                #f.create_dataset('k_end/', data=ps.k_end)
-                #f.create_dataset('k_center/', data=ps.k_center)
-                #f.create_dataset('psvalues/', data=ps.psvalues)
+#                 f.create_dataset('bandpower/', data=ps.band_power)
+#                 #f.create_dataset('k_start/', data=ps.k_start)
+#                 #f.create_dataset('k_end/', data=ps.k_end)
+#                 #f.create_dataset('k_center/', data=ps.k_center)
+#                 #f.create_dataset('psvalues/', data=ps.psvalues)
 
                 f.create_dataset('powerspectrum', data=powerspectrum)
 
         # Delete cache of bands for memory reasons
-        del ps.clarray
-        ps.clarray = None
+        # del ps.clarray
+        # ps.clarray = None
 
         mpiutil.barrier()
 
-        return powerspectrum
+        # return powerspectrum
 
 
 
