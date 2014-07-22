@@ -59,6 +59,7 @@ class PipelineManager(config.Reader):
     generate_svdmodes = config.Property(proptype=bool, default=True)
     generate_klmodes = config.Property(proptype=bool, default=True)
     generate_powerspectra = config.Property(proptype=bool, default=True)
+    generate_crosspower = config.Property(proptype=bool, default=True)
     generate_full_map = config.Property(proptype=bool, default=True)
     generate_svd_map = config.Property(proptype=bool, default=True)
     generate_kl_map = config.Property(proptype=bool, default=True)
@@ -167,9 +168,9 @@ class PipelineManager(config.Reader):
     def generate(self):
         """Generate pipeline outputs."""
 
-        if self.generate_mmodes:
+        for tsname, tsobj in self.timestreams.items():
 
-            for tsname, tsobj in self.timestreams.items():
+            if self.generate_mmodes:
                 if mpiutil.rank0:
                     print
                     print '=' * 80
@@ -177,9 +178,17 @@ class PipelineManager(config.Reader):
 
                 tsobj.generate_mmodes()
 
-        if self.generate_svdmodes:
 
-            for tsname, tsobj in self.timestreams.items():
+            if self.generate_full_map:
+                if mpiutil.rank0:
+                    print
+                    print '=' * 80
+                    print "Generating full map (%s)..." % tsname
+
+                tsobj.mapmake_full(self.nside, 'map_full.hdf5', self.fullmap_fwhm, rank_ratio=self.full_rank_ratio, lcut=self.full_lcut)
+
+
+            if self.generate_svdmodes:
                 if mpiutil.rank0:
                     print
                     print '=' * 80
@@ -187,10 +196,17 @@ class PipelineManager(config.Reader):
 
                 tsobj.generate_mmodes_svd()
 
-        if self.generate_klmodes:
 
-            for tsname, tsobj in self.timestreams.items():
+            if self.generate_svd_map:
+                if mpiutil.rank0:
+                    print
+                    print '=' * 80
+                    print "Generating SVD map (%s)..." % tsname
 
+                tsobj.mapmake_svd(self.nside, 'map_svd.hdf5', self.svdmap_fwhm, rank_ratio=self.svd_rank_ratio, lcut=self.svd_lcut)
+
+
+            if self.generate_klmodes:
                 for klname in self.klmodes:
                     if mpiutil.rank0:
                         print
@@ -204,10 +220,20 @@ class PipelineManager(config.Reader):
                         tsobj.collect_mmodes_kl()
 
 
-        if self.generate_powerspectra:
+            if self.generate_kl_map:
+                for klname in self.klmaps:
+                    if mpiutil.rank0:
+                        print
+                        print '=' * 80
+                        print "Generating KL map (%s:%s)..." % (tsname, klname)
 
-            for tsname, tsobj in self.timestreams.items():
+                    tsobj.set_kltransform(klname)
 
+                    mapfile = 'map_%s.hdf5' % klname
+                    tsobj.mapmake_kl(self.nside, mapfile, wiener=self.wiener, rank_ratio=self.kl_rank_ratio, lcut=self.kl_lcut)
+
+
+            if self.generate_powerspectra:
                 for ps in self.powerspectra:
 
                     psname = ps['psname']
@@ -224,6 +250,8 @@ class PipelineManager(config.Reader):
                     tsobj.powerspectrum()
 
 
+
+        if self.generate_crosspower:
             for xp in self.crosspower:
 
                 psname = xp['psname']
@@ -231,16 +259,16 @@ class PipelineManager(config.Reader):
 
                 tslist = []
 
+                if mpiutil.rank0:
+                    print
+                    print '=' * 80
+                    print 'Estimating cross powerspectra %s...' % psname
+
                 for tsname in xp['timestreams']:
 
                     tsobj = self.timestreams[tsname]
-
-                    if mpiutil.rank0:
-                        print
-                        print '=' * 80
-                        print 'Estimating cross powerspectra (%s:%s)...' % (tsname, psname)
                     tsobj.set_kltransform(klname)
-                    tsobj.set_psestimator(klname)
+                    # tsobj.set_psestimator(psname) # not need for `psname` is an argument given to cross_powerspectum
 
                     tslist.append(tsobj)
 
@@ -248,43 +276,6 @@ class PipelineManager(config.Reader):
 
                 timestream.cross_powerspectrum(tslist, psname, psfile)
 
-
-        if self.generate_kl_map:
-
-            for tsname, tsobj in self.timestreams.items():
-
-                for klname in self.klmaps:
-                    if mpiutil.rank0:
-                        print
-                        print '=' * 80
-                        print "Generating KL map (%s:%s)..." % (tsname, klname)
-
-                    mapfile = 'map_%s.hdf5' % klname
-
-                    tsobj.set_kltransform(klname)
-                    tsobj.mapmake_kl(self.nside, mapfile, wiener=self.wiener, rank_ratio=self.kl_rank_ratio, lcut=self.kl_lcut)
-
-
-        if self.generate_svd_map:
-
-            for tsname, tsobj in self.timestreams.items():
-
-                if mpiutil.rank0:
-                    print
-                    print '=' * 80
-                    print "Generating SVD map (%s)..." % tsname
-                tsobj.mapmake_svd(self.nside, 'map_svd.hdf5', self.svdmap_fwhm, rank_ratio=self.svd_rank_ratio, lcut=self.svd_lcut)
-
-
-        if self.generate_full_map:
-
-            for tsname, tsobj in self.timestreams.items():
-
-                if mpiutil.rank0:
-                    print
-                    print '=' * 80
-                    print "Generating full map (%s)..." % tsname
-                tsobj.mapmake_full(self.nside, 'map_full.hdf5', self.fullmap_fwhm, rank_ratio=self.full_rank_ratio, lcut=self.full_lcut)
 
 
         if mpiutil.rank0:
@@ -298,4 +289,3 @@ class PipelineManager(config.Reader):
 
 
     run = generate
-

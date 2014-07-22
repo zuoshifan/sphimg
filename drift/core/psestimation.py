@@ -485,8 +485,10 @@ class PSEstimation(config.Reader):
         fisher, bias = zip(*fisher_bias)
 
         # Sum over all m-modes to get the over all Fisher and bias
-        self.fisher = np.sum(np.array(fisher), axis=0).real # Be careful of the .real here
-        self.bias = np.sum(np.array(bias), axis=0).real # Be careful of the .real here
+        # self.fisher = np.sum(np.array(fisher), axis=0).real # Be careful of the .real here
+        self.fisher = np.sum(np.array(fisher), axis=0)
+        # self.bias = np.sum(np.array(bias), axis=0).real # Be careful of the .real here
+        self.bias = np.sum(np.array(bias), axis=0)
 
         # Write out all the PS estimation products
         if mpiutil.rank0:
@@ -511,7 +513,8 @@ class PSEstimation(config.Reader):
                 f.create_dataset('fisher/', data=self.fisher)
                 f.create_dataset('bias/', data=self.bias)
                 f.create_dataset('covariance/', data=cv)
-                f.create_dataset('errors/', data=err)
+                # f.create_dataset('errors/', data=err)
+                f.create_dataset('errors/', data=err.real)
                 f.create_dataset('correlation/', data=cr)
                 f.create_dataset('band_power/', data=self.band_power)
 
@@ -593,7 +596,7 @@ class PSEstimation(config.Reader):
         evals, evecs = self.kltrans.modes_m(mi)
 
         if evals is None:
-            return np.zeros((self.nbands + 1 if noise else self.nbands,))
+            return np.zeros((self.nbands + 1 if noise else self.nbands,) + vec1.shape[1:], dtype=np.complex128)
 
         # Weight by C**-1 (transposes are to ensure broadcast works for 1 and 2d vecs)
         x0 = (vec1.T / (evals + 1.0)).T
@@ -606,14 +609,15 @@ class PSEstimation(config.Reader):
 
         if vec2 is not None:
             y0 = (vec2.T / (evals + 1.0)).T
-            y1 = np.dot(evecs.T.conj(), x0)
+            y1 = np.dot(evecs.T.conj(), y0)
             y2 = self.kltrans.beamtransfer.project_vector_svd_conj(mi, y1)
         else:
             y0 = x0
             y2 = x2
 
         # Create empty q vector (length depends on if we're calculating the noise term too)
-        qa = np.zeros((self.nbands + 1 if noise else self.nbands,) + vec1.shape[1:])
+        # qa = np.zeros((self.nbands + 1 if noise else self.nbands,) + vec1.shape[1:])
+        qa = np.zeros((self.nbands + 1 if noise else self.nbands,) + vec1.shape[1:], dtype=np.complex128)
 
         lside = self.telescope.lmax + 1
 
@@ -634,9 +638,11 @@ class PSEstimation(config.Reader):
             noisemodes = 0.0 if self.crosspower else 1.0
             noisemodes = noisemodes + (evals if self.zero_mean else 0.0)
 
-            qa[-1] = np.sum((x0 * y0.conj()).T.real * noisemodes, axis=-1)
+            # qa[-1] = np.sum((x0 * y0.conj()).T.real * noisemodes, axis=-1)
+            qa[-1] = np.sum((x0 * y0.conj()).T * noisemodes, axis=-1)
 
-        return qa.real
+        # return qa.real
+        return qa
 
     #===================================================
 
@@ -787,16 +793,19 @@ class PSExact(PSEstimation):
 
         self.cacheproj(mi)
 
+        inv_c2 = 1.0 / (evals + 1.0)**2 # (tilt(C)^-1)**2
+
         ci = 1.0 / (evals + 1.0)**0.5
         ci = np.outer(ci, ci)
 
         for ia in range(self.nbands):
             c_a = self.getproj(mi, ia)
             fisher[ia, ia] = np.sum(c_a * c_a.T * ci**2)
+            bias[ia] = np.dot(np.diag(c_a), inv_c2)  # Sum_{a} (C_a)_{aa} (C^-1)_{aa}^{2}
 
             for ib in range(ia):
                 c_b = self.getproj(mi, ib)
-                fisher[ia, ib] = np.sum(c_a * c_b.T * ci**2)
+                fisher[ia, ib] = np.sum(c_a * c_b.T * ci**2) # Sum_{ab} (C_a)_{ab} (C_b)_{ba} (C^-1)_{bb} (C^-1)_{aa}
                 fisher[ib, ia] = np.conj(fisher[ia, ib])
 
         self.delproj(mi)

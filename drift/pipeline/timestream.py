@@ -743,6 +743,8 @@ class Timestream(object):
             # copy ps file from product directory
             shutil.copyfile(ps._psfile, self._psfile)
 
+            # print 'powerspectrum = ', powerspectrum
+
             with h5py.File(self._psfile, 'a') as f:
 
 #                 cv = la.inv(fisher)
@@ -761,7 +763,7 @@ class Timestream(object):
 #                 #f.create_dataset('k_center/', data=ps.k_center)
 #                 #f.create_dataset('psvalues/', data=ps.psvalues)
 
-                f.create_dataset('powerspectrum', data=powerspectrum)
+                f.create_dataset('powerspectrum', data=powerspectrum.real)
 
         # Delete cache of bands for memory reasons
         # del ps.clarray
@@ -839,11 +841,13 @@ class Timestream(object):
 
 def cross_powerspectrum(timestreams, psname, psfile):
 
-    import scipy.linalg as la
-
     if os.path.exists(psfile):
-        print "File %s exists. Skipping..." % psfile
+        if mpiutil.rank0:
+            print "File %s exists. Skipping..." % psfile
+        mpiutil.barrier()
         return
+
+    import scipy.linalg as la
 
     products = timestreams[0].manager
 
@@ -854,7 +858,8 @@ def cross_powerspectrum(timestreams, psname, psfile):
 
     def _q_estimate(mi):
 
-        qp = np.zeros((nstream, nstream, ps.nbands), dtype=np.float64)
+        # qp = np.zeros((nstream, nstream, ps.nbands), dtype=np.float64)
+        qp = np.zeros((nstream, nstream, ps.nbands), dtype=np.complex128)
 
         for ti in range(nstream):
             for tj in range(ti+1, nstream):
@@ -865,13 +870,17 @@ def cross_powerspectrum(timestreams, psname, psfile):
                 sj = timestreams[tj]
 
                 qp[ti, tj] = ps.q_estimator(mi, si.mmode_kl(mi), sj.mmode_kl(mi))
-                qp[tj, ti] = qp[ti, tj]
+                # qp[tj, ti] = qp[ti, tj]
+                qp[tj, ti] = np.conj(qp[ti, tj])
 
         return qp
 
     # Determine whether to use m=0 or not
     mlist = range(1 if timestreams[0].no_m_zero else 0, products.telescope.mmax + 1)
     qvals = mpiutil.parallel_map(_q_estimate, mlist)
+
+    # Delete cache of bands for memory reasons
+    ps.delbands()
 
     qtotal = np.array(qvals).sum(axis=0)
 
@@ -885,35 +894,40 @@ def cross_powerspectrum(timestreams, psname, psfile):
 
 
     if mpiutil.rank0:
-        with h5py.File(psfile, 'w') as f:
+        # make directory for cross power spectrum files
+        if not os.path.exists(os.path.dirname(psfile)):
+            os.makedirs(os.path.dirname(psfile))
 
-            cv = la.inv(fisher)
-            err = cv.diagonal()**0.5
-            cr = cv / np.outer(err, err)
+        # copy ps file from product directory
+        shutil.copyfile(ps._psfile, psfile)
 
-            f.create_dataset('fisher/', data=fisher)
-#                f.create_dataset('bias/', data=self.bias)
-            f.create_dataset('covariance/', data=cv)
-            f.create_dataset('error/', data=err)
-            f.create_dataset('correlation/', data=cr)
+        with h5py.File(psfile, 'a') as f:
 
-            f.create_dataset('bandpower/', data=ps.band_power)
-            #f.create_dataset('k_start/', data=ps.k_start)
-            #f.create_dataset('k_end/', data=ps.k_end)
-            #f.create_dataset('k_center/', data=ps.k_center)
-            #f.create_dataset('psvalues/', data=ps.psvalues)
+#             cv = la.inv(fisher)
+#             err = cv.diagonal()**0.5
+#             cr = cv / np.outer(err, err)
 
-            f.create_dataset('powerspectrum', data=powerspectrum)
+#             f.create_dataset('fisher/', data=fisher)
+# #                f.create_dataset('bias/', data=self.bias)
+#             f.create_dataset('covariance/', data=cv)
+#             f.create_dataset('error/', data=err)
+#             f.create_dataset('correlation/', data=cr)
+
+#             f.create_dataset('bandpower/', data=ps.band_power)
+#             #f.create_dataset('k_start/', data=ps.k_start)
+#             #f.create_dataset('k_end/', data=ps.k_end)
+#             #f.create_dataset('k_center/', data=ps.k_center)
+#             #f.create_dataset('psvalues/', data=ps.psvalues)
+
+            f.create_dataset('powerspectrum', data=powerspectrum.real)
 
     # Delete cache of bands for memory reasons
-    del ps.clarray
-    ps.clarray = None
+    # del ps.clarray
+    # ps.clarray = None
 
     mpiutil.barrier()
 
-    return powerspectrum
-
-
+    # return powerspectrum
 
 
 

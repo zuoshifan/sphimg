@@ -4,6 +4,7 @@ from cora.util import nputil
 
 from drift.core import psestimation
 from drift.util import config, mpiutil
+from drift.util import npcov
 from drift.util import typeutil
 
 
@@ -75,7 +76,7 @@ class PSMonteCarlo(psestimation.PSEstimation):
             Bias vector.
         """
 
-        qa = np.zeros((self.nbands, self.nsamples))
+        qa = np.zeros((self.nbands, self.nsamples), dtype=np.complex128)
 
         # Split calculation into subranges to save on memory usage
         num, starts, ends = mpiutil.split_m(self.nsamples, (self.nsamples / 1000) + 1)
@@ -87,7 +88,7 @@ class PSMonteCarlo(psestimation.PSEstimation):
 
         # ft = np.cov(qa)
 
-        fisher = np.cov(qa) #ft[:self.nbands, :self.nbands]
+        fisher = npcov.cov(qa) #ft[:self.nbands, :self.nbands]
         #bias = ft[-1, :self.nbands]
         bias = qa.mean(axis=1) #[:self.nbands]
 
@@ -113,7 +114,7 @@ class PSMonteCarloAlt(psestimation.PSEstimation):
     """
 
     nsamples = config.Property(proptype=typeutil.positive_int, default=500)
-    nswitch = config.Property(proptype=typeutil.natural_int, default=0) #200
+    # nswitch = config.Property(proptype=typeutil.natural_int, default=0) #200
 
 
     def gen_vecs(self, mi):
@@ -140,7 +141,8 @@ class PSMonteCarloAlt(psestimation.PSEstimation):
         xv2 = np.dot(evecs.T.conj(), xv1).reshape(bt.ndof(mi), self.nsamples)
 
         # Project back into sky basis
-        xv3 = self.kltrans.beamtransfer.project_vector_svd_to_sky(mi, xv2, conj=True, temponly=True)
+        # xv3 = self.kltrans.beamtransfer.project_vector_svd_to_sky(mi, xv2, conj=True, temponly=True)
+        xv3 = self.kltrans.beamtransfer.project_vector_svd_conj(mi, xv2, temponly=True)
 
         for bi in range(self.nbands):
 
@@ -158,6 +160,9 @@ class PSMonteCarloAlt(psestimation.PSEstimation):
 
             # Push set of vectors into cache.
             self.vec_cache.append(xv7)
+
+        # self.vec_cache.append(np.dot(xv1, xv1))
+        self.vec_cache.append(xv1 * xv1)
 
 
     def _work_fisher_bias_m(self, mi):
@@ -190,6 +195,7 @@ class PSMonteCarloAlt(psestimation.PSEstimation):
             va = self.vec_cache[ia]
 
             fisher[ia, ia] = np.sum(va * va.conj()) / ns
+            bias[ia] = np.sum(va * self.vec_cache[-1]) /ns
 
             # Estimate diagonal elements
             for ib in range(ia):
