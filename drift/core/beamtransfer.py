@@ -1491,7 +1491,7 @@ class BeamTransfer(object):
         return vecf
 
 
-    def project_vector_svd_to_sky(self, mi, vec, rank_ratio, lcut, temponly=False, conj=False):
+    def project_vector_svd_to_sky(self, mi, vec, rank_ratio, lcut, temponly=False):
         """Project a vector from the the sky into the SVD basis.
 
         Parameters
@@ -1506,9 +1506,6 @@ class BeamTransfer(object):
             Cut threshold of 'l', must be mmax <= lcut <= lmax.
         temponly: boolean
             Force projection of temperature part only (default: False)
-        conj: boolean
-            Reverse projection by applying conjugation (as opposed to pseudo-
-            inverse). Default is False.
 
         Returns
         -------
@@ -1517,17 +1514,16 @@ class BeamTransfer(object):
         """
         npol = 1 if temponly else self.telescope.num_pol_sky
 
-        # if not conj:
-        #     raise Exception("Not implemented non conj yet.")
-
         # Number of significant sv modes at each frequency, and the array bounds
         svnum, svbounds = self._svd_num(mi)
 
         # Get the SVD beam matrix
-        beam = self.beam_svd(mi) # if conj else self.invbeam_svd(mi)
+        beam = self.beam_svd(mi)
         lside = beam.shape[-1] # lmax + 1
         # if lcut == None, then lcut = lmax
-        lcut = lcut or lside -1
+        # lcut = lcut or lside -1
+        if lcut is None:
+           lcut = lside - 1
         mmax = self.telescope.mmax
         lcut = max(lcut, mmax) # must l >= m
         lcut1 = lcut + 1
@@ -1544,21 +1540,17 @@ class BeamTransfer(object):
             for fi in self._svd_freq_iter(mi):
 
                 lvec = vec[svbounds[fi]:svbounds[fi+1]] # Matrix section for this frequency
-                if conj:
-                    fbeam = beam[fi, :svnum[fi], pi, :].T.conj() # Beam matrix for this frequency and cut
-                    vecf[fi, pi, mi:lcut1] += np.dot(fbeam, lvec)
+                # fbeam = beam[fi, pi, :, :svnum[fi]] # Beam matrix for this frequency and cut
+                fbeam = beam[fi, :svnum[fi], pi, :]
+                # if np.max(fbeam.real) <= self.beam_cut and np.max(fbeam.imag) <= self.beam_cut:
+                # if np.max(fbeam.real) <= 1.0e3 and np.max(fbeam.imag) <= 1.0e3:
+                # if (mi, fi) in self.beam_cut_list:
+                    # continue
+                x, resids, rank, s = la.lstsq(np.dot(fbeam.T.conj(), fbeam), np.dot(fbeam.T.conj(), lvec), cond=1e-6)
+                if rank > rank_ratio * lside:
+                    vecf[fi, pi, mi:lcut1] = x
                 else:
-                    # fbeam = beam[fi, pi, :, :svnum[fi]] # Beam matrix for this frequency and cut
-                    fbeam = beam[fi, :svnum[fi], pi, :]
-                    # if np.max(fbeam.real) <= self.beam_cut and np.max(fbeam.imag) <= self.beam_cut:
-                    # if np.max(fbeam.real) <= 1.0e3 and np.max(fbeam.imag) <= 1.0e3:
-                    # if (mi, fi) in self.beam_cut_list:
-                        # continue
-                    x, resids, rank, s = la.lstsq(np.dot(fbeam.T.conj(), fbeam), np.dot(fbeam.T.conj(), lvec), cond=1e-6)
-                    if rank > rank_ratio * lside:
-                        vecf[fi, pi, mi:lcut1] = x
-                    else:
-                        print ('Rank <= %.1f for m = %d, fi = %d, pol = {%d}...' % (rank_ratio*lside, mi, fi, pi)).format('T', 'Q', 'U', 'V')
+                    print ('Rank <= %.1f for m = %d, fi = %d, pol = {%d}...' % (rank_ratio*lside, mi, fi, pi)).format('T', 'Q', 'U', 'V')
 
                 # lvec = vec[svbounds[fi]:svbounds[fi+1]] # Matrix section for this frequency
 
@@ -1850,7 +1842,7 @@ class BeamTransferNoSVD(BeamTransfer):
     def project_vector_telescope_to_svd(self, mi, vec, *args, **kwargs):
         return vec.reshape(-1)
 
-    def project_vector_svd_to_sky(self, mi, vec, rank_ratio, lcut, temponly=False, conj=False):
+    def project_vector_svd_to_sky(self, mi, vec, rank_ratio, lcut, temponly=False):
         return self.project_vector_telescope_to_sky(mi, vec, rank_ratio, lcut)
 
 
