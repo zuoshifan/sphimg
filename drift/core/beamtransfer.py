@@ -761,15 +761,14 @@ class BeamTransfer(object):
         lm, sm, em = mpiutil.split_local(self.telescope.mmax+1)
 
         # Iterate over all m's and create the hdf5 files we will write into.
-        dsize = (self.telescope.nfreq, 2, self.telescope.nbase, self.telescope.num_pol_sky, self.telescope.lmax+1)
-        csize = (1, 2, min(10, self.telescope.nbase), self.telescope.num_pol_sky, self.telescope.lmax+1)
+        # dsize = (self.telescope.nfreq, 2, self.telescope.nbase, self.telescope.num_pol_sky, self.telescope.lmax+1)
+        # csize = (1, 2, min(10, self.telescope.nbase), self.telescope.num_pol_sky, self.telescope.lmax+1)
 
         for mi in mpiutil.mpirange(self.telescope.mmax + 1):
 
-            # f = h5py.File(self._mfile(mi), 'w')
-
-            # dsize = (self.telescope.nfreq, 2, self.telescope.nbase, self.telescope.num_pol_sky, self.telescope.lmax+1)
-            # csize = (1, 2, min(10, self.telescope.nbase), self.telescope.num_pol_sky, self.telescope.lmax+1)
+            # don't save all zero values for `l` < `m` to save disk space
+            dsize = (self.telescope.nfreq, 2, self.telescope.nbase, self.telescope.num_pol_sky, self.telescope.lmax+1 - mi)
+            csize = (1, 2, min(10, self.telescope.nbase), self.telescope.num_pol_sky, self.telescope.lmax+1 - mi)
 
             with h5py.File(self._mfile(mi), 'w') as f:
                 f.create_dataset('beam_m', dsize, chunks=csize, compression='lzf', dtype=np.complex128)
@@ -833,7 +832,8 @@ class BeamTransfer(object):
                     for fbl, fbi in enumerate(range(fbstart, fbend)):
                         fi = fbmap[0, fbi]
                         bi = fbmap[1, fbi]
-                        mfile['beam_m'][fi, :, bi] = m_array[fbl, ..., lmi]
+                        # mfile['beam_m'][fi, :, bi] = m_array[fbl, ..., lmi]
+                        mfile['beam_m'][fi, :, bi] = m_array[fbl, ..., mi:, lmi] # noly save l >= m
 
             del m_array
 

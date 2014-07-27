@@ -592,8 +592,6 @@ class TransitTelescope(config.Reader):
 
         # Sort the baselines by ascending lmax and iterate through in that
         # order, calculating the transfer matrices
-        i_arr = np.argsort(lmax.flat)
-        
         for iflat in np.argsort(lmax.flat):
             ind = np.unravel_index(iflat, lmax.shape)
             trans = self._transfer_single(bl_indices[ind], f_indices[ind], lmax[ind], lside)
