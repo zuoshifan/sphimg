@@ -386,7 +386,7 @@ class KLTransform(config.Reader):
             evalsf = np.zeros(nside, dtype=np.float64)
             if evals.size != 0:
                 evalsf[(-evals.size):] = evals
-            f.create_dataset('evals_full', data=evalsf)
+            f.create_dataset('evals_full', data=evalsf, compression='lzf')
 
             # Discard eigenmodes with S/N below threshold if requested.
             if self.subset:
@@ -397,15 +397,15 @@ class KLTransform(config.Reader):
                 print "Modes with S/N > %f: %i of %i" % (self.threshold, evals.size, evalsf.size)
 
             # Write out potentially reduced eigen spectrum.
-            f.create_dataset('evals', data=evals)
-            f.create_dataset('evecs', data=evecs)
+            f.create_dataset('evals', data=evals, compression='lzf')
+            f.create_dataset('evecs', data=evecs, compression='lzf')
             f.attrs['num_modes'] = evals.size
 
             if self.inverse:
                 if self.subset:
                     inv = inv[i_ev:]
 
-                f.create_dataset('evinv', data=inv)
+                f.create_dataset('evinv', data=inv, compression='lzf')
 
             # Call hook which allows derived classes to save special information
             # into the EV file.
@@ -538,7 +538,7 @@ class KLTransform(config.Reader):
 
         if mpiutil.rank0:
             with h5py.File(self._all_evfile, 'w') as f:
-                f.create_dataset('evals', data=evarray)
+                f.create_dataset('evals', data=evarray, compression='lzf')
 
         mpiutil.barrier()
 

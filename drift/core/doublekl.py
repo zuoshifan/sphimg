@@ -82,7 +82,7 @@ class DoubleKL(kltransform.KLTransform):
         kltransform.KLTransform._ev_save_hook(self, f, evextra)
 
         # Save out S/F ratios
-        f.create_dataset('f_evals', data=evextra['f_evals'])
+        f.create_dataset('f_evals', data=evextra['f_evals'], compression='lzf')
 
 
     def _collect(self, regen=False):
@@ -118,6 +118,6 @@ class DoubleKL(kltransform.KLTransform):
 
         if mpiutil.rank0:
             with h5py.File(self._all_evfile, 'w') as f:
-                f.create_dataset('evals', data=evarray[:, 0])
-                f.create_dataset('f_evals', data=evarray[:, 1])
+                f.create_dataset('evals', data=evarray[:, 0], compression='lzf')
+                f.create_dataset('f_evals', data=evarray[:, 1], compression='lzf')
 

@@ -1055,7 +1055,7 @@ class BeamTransfer(object):
             print '=' * 80
             print 'Create file %s...' % self._svdspectrum_file
             with h5py.File(self._svdspectrum_file, 'w') as f:
-                f.create_dataset('singularvalues', data=svdspectrum)
+                f.create_dataset('singularvalues', data=svdspectrum, compression='lzf')
 
         mpiutil.barrier()
 

@@ -250,7 +250,7 @@ class Timestream(object):
                 pass
 
             with h5py.File(self._mfile(mi), 'w') as f:
-                f.create_dataset('/mmode', data=col_mmodes[lmi])
+                f.create_dataset('/mmode', data=col_mmodes[lmi], compression='lzf')
                 f.attrs['m'] = mi
 
         if mpiutil.rank0:
@@ -334,7 +334,7 @@ class Timestream(object):
             svdm = self.beamtransfer.project_vector_telescope_to_svd(mi, tm)
 
             with h5py.File(self._svdfile(mi), 'w') as f:
-                f.create_dataset('mmode_svd', data=svdm)
+                f.create_dataset('mmode_svd', data=svdm, compression='lzf')
                 f.attrs['m'] = mi
             # with open(mlist_file, 'a') as f:
             #     f.write('%d\n' % mi)
@@ -597,7 +597,7 @@ class Timestream(object):
             print '=' * 80
             print "Creating all kl-modes file %s..." % self._klmodes_file
             with h5py.File(self._klmodes_file, 'w') as f:
-                f.create_dataset('evals', data=evarray)
+                f.create_dataset('evals', data=evarray, compression='lzf')
 
         mpiutil.barrier()
 
@@ -1111,7 +1111,7 @@ def simulate(m, outdir, tsname, maps=[], ndays=None, resolution=0, seed=None, **
         with h5py.File(tstream._ffile(fi), 'w') as f:
 
             # Timestream data
-            f.create_dataset('/timestream', data=vis_stream[:, lfi])
+            f.create_dataset('/timestream', data=vis_stream[:, lfi], compression='lzf')
 
     # mpiutil.barrier()
 
