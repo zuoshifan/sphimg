@@ -619,7 +619,7 @@ class PSEstimation(config.Reader):
         # qa = np.zeros((self.nbands + 1 if noise else self.nbands,) + vec1.shape[1:])
         qa = np.zeros((self.nbands + 1 if noise else self.nbands,) + vec1.shape[1:], dtype=np.complex128)
 
-        lside = self.telescope.lmax + 1
+        lside = self.telescope.lmax+1 - mi
 
         # Calculate q_a for each band
         for bi in range(self.nbands):
@@ -629,7 +629,7 @@ class PSEstimation(config.Reader):
                 lxvec = x2[:, 0, li]
                 lyvec = y2[:, 0, li]
 
-                qa[bi] += np.sum(lyvec.conj() * np.dot(self.clarray[bi][li], lxvec), axis=0) # TT only.
+                qa[bi] += np.sum(lyvec.conj() * np.dot(self.clarray[bi][li + mi], lxvec), axis=0) # TT only.
 
         # Calculate q_a for noise power (x0^H N x0 = |x0|^2)
         if noise:

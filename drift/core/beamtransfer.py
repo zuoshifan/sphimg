@@ -1477,7 +1477,7 @@ class BeamTransfer(object):
         beam = self.beam_svd(mi)
 
         # Create the output matrix
-        vecf = np.zeros((self.nfreq, self.telescope.num_pol_sky, self.telescope.lmax + 1,) + vec.shape[1:], dtype=np.complex128)
+        vecf = np.zeros((self.nfreq, self.telescope.num_pol_sky, self.telescope.lmax+1 - mi,) + vec.shape[1:], dtype=np.complex128)
 
         for pi in range(npol):
             for fi in self._svd_freq_iter(mi):
