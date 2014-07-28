@@ -1107,8 +1107,8 @@ class BeamTransfer(object):
         with h5py.File(self._mfile(mi), 'r') as mfile:
 
             for fi in range(self.nfreq):
-                beamf = mfile['beam_m'][fi][:].reshape((self.ntel, self.nsky))
-                vecf[fi] = np.dot(beamf, vec[fi].reshape(self.nsky))
+                beamf = mfile['beam_m'][fi][:].reshape((self.ntel, self.nsky(mi)))
+                vecf[fi] = np.dot(beamf, vec[fi, :, mi:].reshape(self.nsky(mi)))
 
         return vecf
 
@@ -1130,7 +1130,7 @@ class BeamTransfer(object):
         vec : np.ndarray
             Sky data vector packed as [freq, baseline, polarisation]
         rank_ratio : float
-            Set :math:`a_{lm}=0` for :math:`\mathbf{Ba=v}` if rank(:math:`\mathbf{B}}`) <= `rank_ratio` * self.nsky. Those alms often cause noisy strips in the final sky map.
+            Set :math:`a_{lm}=0` for :math:`\mathbf{Ba=v}` if rank(:math:`\mathbf{B}}`) <= `rank_ratio` * self.nsky(mi). Those alms often cause noisy strips in the final sky map.
         lcut : interger
             Cut threshold of 'l', must be mmax <= lcut <= lmax.
 
@@ -1143,23 +1143,23 @@ class BeamTransfer(object):
         # ibeam = self.invbeam_m(mi).reshape((self.nfreq, self.nsky, self.ntel))
         beam = self.beam_m(mi)
         npol = beam.shape[-2]
-        lside = beam.shape[-1] # lmax + 1
-        # if lcut == None, then lcut = lmax
-        lcut = lcut or lside -1
+        lside = beam.shape[-1] # lmax+1 - mi
+        if lcut is None:
+           lcut = lside -1 + mi # lmax
         mmax = self.telescope.mmax
         lcut = max(lcut, mmax) # must l >= m
         lcut1 = lcut + 1
-        lcut1 = min(lcut1, lside) # must have lcut <= lmax
+        lcut1 = min(lcut1, lside + mi) # must have lcut <= lmax
         if mpiutil.rank0 and mi == 0:
-            print 'Cut l at %d for lmax = %d, mmax = %d.' % (lcut1-1, lside-1, mmax)
+            print 'Cut l at %d for lmax = %d, mmax = %d.' % (lcut1-1, lside-1+mi, mmax)
         # nsky = npol * (lside - mi) # 4 * (lmax + 1 - mi)
         nsky = npol * (lcut1 - mi) # 4 * (lcut + 1 - mi)
-        beam = beam[..., mi:lcut1] # all zero for l < m
+        beam = beam[..., :(lcut1 - mi)] # all zero for l < m
         # beam = beam.reshape(self.nfreq, self.ntel, self.nsky)
         beam = beam.reshape(self.nfreq, self.ntel, nsky)
 
         # vecb = np.zeros((self.nfreq, self.nsky), dtype=np.complex128)
-        vecb = np.zeros((self.nfreq, npol, lside), dtype=np.complex128)
+        vecb = np.zeros((self.nfreq, npol, lside + mi), dtype=np.complex128)
         vec = vec.reshape((self.nfreq, self.ntel))
 
         # self.noise_weight = False
@@ -1179,13 +1179,13 @@ class BeamTransfer(object):
             # vecb[fi] = np.dot(ibeam[fi], vec[fi, :].reshape(self.ntel))
             # vecb[fi] = la.lu_solve(la.lu_factor(np.dot(beam[fi].T.conj(), beam[fi])), np.dot(beam[fi].T.conj(), vec[fi]))  # failed for singular matrix
             x, resids, rank, s = la.lstsq(np.dot(beam[fi].T.conj(), beam[fi]), np.dot(beam[fi].T.conj(), vec[fi]), cond=1e-6)
-            if rank > rank_ratio * self.nsky:
+            if rank > rank_ratio * self.nsky(0): # max nsky = nsky(0)
                 # vecb[fi] = x
                 for p in range(npol):
                     vecb[fi, p, mi:lcut1] = x[p*(lcut1-mi):(p+1)*(lcut1-mi)]
             else:
                 # if mpiutil.rank0:
-                print 'Rank <= %.1f for m = %d, fi = %d...' % (rank_ratio*self.nsky, mi, fi)
+                print 'Rank <= %.1f for m = %d, fi = %d...' % (rank_ratio*self.nsky(0), mi, fi)
             # print 'beam shape: ', beam[fi].shape
             # if flag:
             #     datafile = 'norm.txt'
@@ -1207,24 +1207,24 @@ class BeamTransfer(object):
     project_vector_backward = project_vector_telescope_to_sky
 
 
-    def project_vector_backward_dirty(self, mi, vec):
+    # def project_vector_backward_dirty(self, mi, vec):
 
-        dbeam = self.beam_m(mi).reshape((self.nfreq, self.ntel, self.nsky))
-        dbeam = dbeam.transpose((0, 2, 1)).conj()
+    #     dbeam = self.beam_m(mi).reshape((self.nfreq, self.ntel, self.nsky))
+    #     dbeam = dbeam.transpose((0, 2, 1)).conj()
 
-        vecb = np.zeros((self.nfreq, self.nsky), dtype=np.complex128)
-        vec = vec.reshape((self.nfreq, self.ntel))
+    #     vecb = np.zeros((self.nfreq, self.nsky), dtype=np.complex128)
+    #     vec = vec.reshape((self.nfreq, self.ntel))
 
-        for fi in range(self.nfreq):
-            norm = np.dot(dbeam[fi].T.conj(), dbeam[fi]).diagonal()
-            norm = np.where(norm < 1e-6, 0.0, 1.0 / norm)
-            #norm = np.dot(dbeam[fi], dbeam[fi].T.conj()).diagonal()
-            #norm = np.where(np.logical_or(np.abs(norm) < 1e-4,
-            #np.abs(norm) < np.abs(norm.max()*1e-2)), 0.0, 1.0 / norm)
-            vecb[fi] = np.dot(dbeam[fi], vec[fi, :].reshape(self.ntel) * norm)
+    #     for fi in range(self.nfreq):
+    #         norm = np.dot(dbeam[fi].T.conj(), dbeam[fi]).diagonal()
+    #         norm = np.where(norm < 1e-6, 0.0, 1.0 / norm)
+    #         #norm = np.dot(dbeam[fi], dbeam[fi].T.conj()).diagonal()
+    #         #norm = np.where(np.logical_or(np.abs(norm) < 1e-4,
+    #         #np.abs(norm) < np.abs(norm.max()*1e-2)), 0.0, 1.0 / norm)
+    #         vecb[fi] = np.dot(dbeam[fi], vec[fi, :].reshape(self.ntel) * norm)
 
-        return vecb.reshape((self.nfreq, self.telescope.num_pol_sky,
-                             self.telescope.lmax + 1))
+    #     return vecb.reshape((self.nfreq, self.telescope.num_pol_sky,
+    #                          self.telescope.lmax + 1))
 
 
     def project_matrix_sky_to_telescope(self, mi, mat):
@@ -1519,19 +1519,19 @@ class BeamTransfer(object):
 
         # Get the SVD beam matrix
         beam = self.beam_svd(mi)
-        lside = beam.shape[-1] # lmax + 1
+        lside = beam.shape[-1] # lmax + 1 -mi
         # if lcut == None, then lcut = lmax
         # lcut = lcut or lside -1
         if lcut is None:
-           lcut = lside - 1
+           lcut = lside - 1 + mi
         mmax = self.telescope.mmax
         lcut = max(lcut, mmax) # must l >= m
         lcut1 = lcut + 1
-        lcut1 = min(lcut1, lside) # must have lcut <= lmax
+        lcut1 = min(lcut1, lside + mi) # must have lcut <= lmax
         if mpiutil.rank0 and mi == 0:
-            print 'Cut l at %d for lmax = %d, mmax = %d.' % (lcut1-1, lside-1, mmax)
+            print 'Cut l at %d for lmax = %d, mmax = %d.' % (lcut1-1, lside-1+mi, mmax)
         # nsky = npol * (lside - mi) # 4 * (lmax + 1 - mi)
-        beam = beam[..., mi:lcut1] # all zero for l < m
+        beam = beam[..., :(lcut1 - mi)] # all zero for l < m
 
         # Create the output matrix
         vecf = np.zeros((self.nfreq, self.telescope.num_pol_sky, self.telescope.lmax + 1,) + vec.shape[1:], dtype=np.complex128)
@@ -1547,10 +1547,10 @@ class BeamTransfer(object):
                 # if (mi, fi) in self.beam_cut_list:
                     # continue
                 x, resids, rank, s = la.lstsq(np.dot(fbeam.T.conj(), fbeam), np.dot(fbeam.T.conj(), lvec), cond=1e-6)
-                if rank > rank_ratio * lside:
+                if rank > rank_ratio * (lside + mi):
                     vecf[fi, pi, mi:lcut1] = x
                 else:
-                    print ('Rank <= %.1f for m = %d, fi = %d, pol = {%d}...' % (rank_ratio*lside, mi, fi, pi)).format('T', 'Q', 'U', 'V')
+                    print ('Rank <= %.1f for m = %d, fi = %d, pol = {%d}...' % (rank_ratio*(lside + mi), mi, fi, pi)).format('T', 'Q', 'U', 'V')
 
                 # lvec = vec[svbounds[fi]:svbounds[fi+1]] # Matrix section for this frequency
 
@@ -1569,10 +1569,11 @@ class BeamTransfer(object):
         """Degrees of freedom measured by the telescope (per frequency)"""
         return 2 * self.telescope.npairs
 
-    @property
-    def nsky(self):
+    # @property
+    def nsky(self, mi):
         """Degrees of freedom on the sky at each frequency."""
-        return (self.telescope.lmax + 1) * self.telescope.num_pol_sky
+        # return (self.telescope.lmax + 1) * self.telescope.num_pol_sky
+        return (self.telescope.lmax+1 - mi) * self.telescope.num_pol_sky
 
     @property
     def nfreq(self):
