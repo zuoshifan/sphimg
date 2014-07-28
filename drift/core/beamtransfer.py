@@ -883,8 +883,8 @@ class BeamTransfer(object):
             print 'Create beam transfer svd-files...'
 
         # Data shape for writing the SVD beam matrix into.
-        dsize_bsvd = (self.telescope.nfreq, self.svd_len, self.telescope.num_pol_sky, self.telescope.lmax+1)
-        csize_bsvd = (1, min(10, self.svd_len), self.telescope.num_pol_sky, self.telescope.lmax+1)
+        # dsize_bsvd = (self.telescope.nfreq, self.svd_len, self.telescope.num_pol_sky, self.telescope.lmax+1)
+        # csize_bsvd = (1, min(10, self.svd_len), self.telescope.num_pol_sky, self.telescope.lmax+1)
 
         # Data shape for writing the inverse SVD beam matrix into.
         # dsize_ibsvd = (self.telescope.nfreq, self.telescope.num_pol_sky, self.telescope.lmax+1, self.svd_len)
@@ -918,8 +918,8 @@ class BeamTransfer(object):
             with h5py.File(self._mfile(mi), 'r') as fm, h5py.File(self._svdfile(mi), 'w') as fs:
 
                 # Create a chunked dataset for writing the SVD beam matrix into.
-                # dsize_bsvd = (self.telescope.nfreq, self.svd_len, self.telescope.num_pol_sky, self.telescope.lmax+1)
-                # csize_bsvd = (1, min(10, self.svd_len), self.telescope.num_pol_sky, self.telescope.lmax+1)
+                dsize_bsvd = (self.telescope.nfreq, self.svd_len, self.telescope.num_pol_sky, self.telescope.lmax+1 - mi)
+                csize_bsvd = (1, min(10, self.svd_len), self.telescope.num_pol_sky, self.telescope.lmax+1 - mi)
                 dset_bsvd = fs.create_dataset('beam_svd', dsize_bsvd, chunks=csize_bsvd, compression='lzf', dtype=np.complex128)
 
                 # Create a chunked dataset for writing the inverse SVD beam matrix into.
@@ -941,7 +941,7 @@ class BeamTransfer(object):
                 for fi in np.arange(self.telescope.nfreq):
 
                     # Read the positive and negative m beams, and combine into one.
-                    bf = fm['beam_m'][fi][:].reshape(self.ntel, self.telescope.num_pol_sky, self.telescope.lmax + 1)
+                    bf = fm['beam_m'][fi][:].reshape(self.ntel, self.telescope.num_pol_sky, self.telescope.lmax+1 - mi)
 
                     noisew = self.telescope.noisepower(np.arange(self.telescope.npairs), fi).flatten()**(-0.5)
                     noisew = np.concatenate([noisew, noisew])
@@ -963,8 +963,8 @@ class BeamTransfer(object):
                         bf1 = np.dot(ut1, bfr)
 
                         ## SVD 2 - project onto polarisation null space
-                        bfp = bf1.reshape(bf1.shape[0], self.telescope.num_pol_sky, self.telescope.lmax + 1)[:, 1:]
-                        bfp = bfp.reshape(bf1.shape[0], (self.telescope.num_pol_sky - 1) * (self.telescope.lmax + 1))
+                        bfp = bf1.reshape(bf1.shape[0], self.telescope.num_pol_sky, self.telescope.lmax+1 - mi)[:, 1:]
+                        bfp = bfp.reshape(bf1.shape[0], (self.telescope.num_pol_sky - 1) * (self.telescope.lmax+1 - mi))
                         u2, s2 = matrix_nullspace(bfp, rtol=self.polsvcut, errmsg=("SVD2 m=%i f=%i" % (mi, fi)))
 
                         ut2 = np.dot(u2.T.conj(), ut1)
@@ -975,7 +975,7 @@ class BeamTransfer(object):
                     if bf2.shape[0] > 0 and (self.telescope.num_pol_sky == 1 or (s1 > 0.0).any()):
 
                         ## SVD 3 - decompose polarisation null space
-                        bft = bf2.reshape(-1, self.telescope.num_pol_sky, self.telescope.lmax + 1)[:, 0]
+                        bft = bf2.reshape(-1, self.telescope.num_pol_sky, self.telescope.lmax+1 - mi)[:, 0]
 
                         u3, s3 = matrix_image(bft, rtol=0.0, errmsg=("SVD3 m=%i f=%i" % (mi, fi)))
                         ut3 = np.dot(u3.T.conj(), ut2)
@@ -996,7 +996,7 @@ class BeamTransfer(object):
                         dset_ut[fi, :nmodes] = (ut * noisew[np.newaxis, :])
 
                         # Save out the modified beam matrix (for mapping from the sky into the SVD basis)
-                        dset_bsvd[fi, :nmodes] = beam.reshape(nmodes, self.telescope.num_pol_sky, self.telescope.lmax + 1)
+                        dset_bsvd[fi, :nmodes] = beam.reshape(nmodes, self.telescope.num_pol_sky, self.telescope.lmax+1 - mi)
 
                         # Find the pseudo-inverse of the beam matrix and save to disk.
                         # dset_ibsvd[fi, :, :, :nmodes] = ibeam.reshape(self.telescope.num_pol_sky, self.telescope.lmax + 1, nmodes)
