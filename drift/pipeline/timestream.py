@@ -715,7 +715,8 @@ class Timestream(object):
         import scipy.linalg as la
 
         ps = self.manager.psestimators[self.psname]
-        ps.genbands()
+        # ps.genbands()
+        ps.load_clarray()
 
         def _q_estimate(mi):
 
@@ -852,7 +853,8 @@ def cross_powerspectrum(timestreams, psname, psfile):
     products = timestreams[0].manager
 
     ps = products.psestimators[psname]
-    ps.genbands()
+    # ps.genbands()
+    ps.load_clarray()
 
     nstream = len(timestreams)
 

@@ -206,6 +206,10 @@ class PSEstimation(config.Reader):
     def _psfile(self):
         return self._psdir + 'fisher.hdf5'
 
+    @property
+    def _clzzfile(self):
+        return self._psdir + 'clzz.hdf5'
+
 
     def __init__(self, kltrans, psname="ps"):
         """Initialise a PS estimator class.
@@ -380,6 +384,22 @@ class PSEstimation(config.Reader):
         mpiutil.Allgatherv(mpiutil.IN_PLACE, [self.clarray, sizes, displ, mpiutil.DOUBLE])
 
 
+    def save_clarray(self):
+        """Save clarray to disk for later use."""
+        if mpiutil.rank0:
+            with h5py.File(self._clzzfile, 'w') as f:
+                f.create_dataset('clarray', data=self.clarray, compression='lzf')
+                f.attrs['k_center'] = self.k_center
+        mpiutil.barrier()
+
+
+    def load_clarray(self):
+        """Load clarray from disk."""
+        with h5py.File(self._clzzfile, 'r') as f:
+            self.clarray = f['clarray'][...]
+            self.k_center = f.attrs['k_center']
+
+
     def delbands(self):
         """Delete power spectrum bands to save memory."""
 
@@ -478,6 +498,8 @@ class PSEstimation(config.Reader):
         # Use parallel map to distribute Fisher calculation
         fisher_bias = mpiutil.parallel_map(self.fisher_bias_m, range(self.telescope.mmax + 1))
 
+        # Save clarray
+        self.save_clarray()
         # Delete power spectrum bands to save memory.
         self.delbands()
 
