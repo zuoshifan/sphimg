@@ -1130,6 +1130,9 @@ def simulate(m, outdir, tsname, maps=[], ndays=None, resolution=0, seed=None, **
             f.create_dataset('/uniquepairs', data=tel.uniquepairs)
             f.create_dataset('/baselines', data=tel.baselines)
 
+            # Telescope frequencies
+            f.create_dataset('/frequencies', data=tel.frequencies)
+
             # Write metadata
             f.attrs['beamtransfer_path'] = os.path.abspath(bt.directory)
             f.attrs['ntime'] = ntime
