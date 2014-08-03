@@ -733,7 +733,17 @@ class Timestream(object):
 
         fisher, bias = ps.fisher_bias()
 
-        powerspectrum =  np.dot(la.inv(fisher), qtotal - bias)
+        # Unwindowed method powerspectrum
+        uw_powerspectrum =  np.zeros_like(bias)
+        # Inverse variance method powerspectrum
+        iv_powerspectrum = np.zeros_like(bias)
+        # Check to ensure that Fisher matrix isn't all zeros.
+        if not (fisher == 0).all():
+            with h5py.File(ps._psfile) as f:
+                inv_fisher = f['uw_covariance'][...]
+            uw_powerspectrum =  np.dot(inv_fisher, qtotal - bias)
+            for ia in range(iv_powerspectrum.shape[0]):
+                iv_powerspectrum[ia] = (qtotal[ia] - bias[ia]) / fisher[ia, ia]
 
 
         if mpiutil.rank0:
@@ -764,7 +774,8 @@ class Timestream(object):
 #                 #f.create_dataset('k_center/', data=ps.k_center)
 #                 #f.create_dataset('psvalues/', data=ps.psvalues)
 
-                f.create_dataset('powerspectrum', data=powerspectrum.real)
+                f.create_dataset('uw_powerspectrum', data=uw_powerspectrum.real)
+                f.create_dataset('iv_powerspectrum', data=iv_powerspectrum.real)
 
         # Delete cache of bands for memory reasons
         # del ps.clarray

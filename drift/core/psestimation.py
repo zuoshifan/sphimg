@@ -520,25 +520,56 @@ class PSEstimation(config.Reader):
             # Check to see ensure that Fisher matrix isn't all zeros.
             if not (self.fisher == 0).all():
                 # Generate derived quantities (covariance, errors..)
-                cv = la.inv(self.fisher)
-                err = cv.diagonal()**0.5
-                cr = cv / np.outer(err, err)
+                # Unwindowed method
+                uw_cv = la.inv(self.fisher)
+                uw_err = uw_cv.diagonal()**0.5
+                uw_cr = uw_cv / np.outer(uw_err, uw_err)
+                # Inverse variance method
+                iv_bias = np.zeros_like(self.bias)
+                iv_cv = np.zeros_like(self.fisher)
+                iv_wf = np.zeros_like(self.fisher) # window function
+                for ia in range(self.nbands):
+                    iv_bias[ia] = self.bias[ia] / self.fisher[ia, ia]
+                    iv_cv[ia, ia] = 1.0 / self.fisher[ia, ia]
+                    iv_wf[ia, ia] = 1.0
+                    for ib in range(ia):
+                        iv_cv[ia, ib] = self.fisher[ia, ib] / (self.fisher[ia, ia] * self.fisher[ib, ib])
+                        iv_cv[ib, ia] = np.conj(iv_cv[ia, ib])
+                        iv_wf[ia, ib] = self.fisher[ia, ib] / self.fisher[ia, ia]
+                        iv_wf[ib, ia] = np.conj(iv_wf[ia, ib])
+                iv_err = iv_cv.diagonal()**0.5
+                iv_cr = iv_cv / np.outer(iv_err, iv_err)
             else:
-                cv = np.zeros_like(self.fisher)
-                err = cv.diagonal()
-                cr = np.zeros_like(self.fisher)
+                # Unwindowed method
+                uw_cv = np.zeros_like(self.fisher)
+                uw_err = uw_cv.diagonal()
+                uw_cr = np.zeros_like(self.fisher)
+                # Inverse variance method
+                iv_bias = np.zeros_like(self.bias)
+                iv_cv = np.zeros_like(self.fisher)
+                iv_err = uw_cv.diagonal()
+                iv_cr = np.zeros_like(self.fisher)
+                iv_wf = np.zeros_like(self.fisher)
 
             # f = h5py.File(self.psdir + '/fisher.hdf5', 'w')
             with h5py.File(self._psfile, 'w') as f:
                 f.attrs['bandtype'] = self.bandtype
 
-                f.create_dataset('fisher/', data=self.fisher)
-                f.create_dataset('bias/', data=self.bias)
-                f.create_dataset('covariance/', data=cv)
-                # f.create_dataset('errors/', data=err)
-                f.create_dataset('errors/', data=err.real)
-                f.create_dataset('correlation/', data=cr)
                 f.create_dataset('band_power/', data=self.band_power)
+                f.create_dataset('fisher/', data=self.fisher)
+
+                # Unwindowed
+                f.create_dataset('uw_bias/', data=self.bias)
+                f.create_dataset('uw_covariance/', data=uw_cv)
+                f.create_dataset('uw_errors/', data=uw_err.real)
+                f.create_dataset('uw_correlation/', data=uw_cr)
+
+                # Inverse variance
+                f.create_dataset('iv_bias/', data=iv_bias)
+                f.create_dataset('iv_covariance/', data=iv_cv)
+                f.create_dataset('iv_errors/', data=iv_err.real)
+                f.create_dataset('iv_correlation/', data=iv_cr)
+                f.create_dataset('iv_wfunction/', data=iv_wf)
 
                 if self.bandtype == 'polar':
                     f.create_dataset('k_start/', data=self.k_start)
@@ -587,7 +618,7 @@ class PSEstimation(config.Reader):
     def fisher_bias(self):
 
         with h5py.File(self._psfile, 'r') as f:
-            return f['fisher'][:], f['bias'][:]
+            return f['fisher'][:], f['uw_bias'][:]
 
     #===================================================
 
