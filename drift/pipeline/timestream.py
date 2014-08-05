@@ -733,17 +733,18 @@ class Timestream(object):
 
         fisher, bias = ps.fisher_bias()
 
-        # Unwindowed method powerspectrum
-        uw_powerspectrum =  np.zeros_like(bias)
-        # Inverse variance method powerspectrum
-        iv_powerspectrum = np.zeros_like(bias)
-        # Check to ensure that Fisher matrix isn't all zeros.
-        if not (fisher == 0).all():
-            with h5py.File(ps._psfile) as f:
-                inv_fisher = f['uw_covariance'][...]
-            uw_powerspectrum =  np.dot(inv_fisher, qtotal - bias)
-            for ia in range(iv_powerspectrum.shape[0]):
-                iv_powerspectrum[ia] = (qtotal[ia] - bias[ia]) / fisher[ia, ia]
+        # Get mixing matrix
+        with h5py.File(ps._psfile, 'r') as f:
+           uw_mm = f['uw_mmatrix'][...] # Unwindowed mixing matrix
+           uc_mm = f['uc_mmatrix'][...] # Uncorrelated mixing matrix
+           mv_mm = f['mv_mmatrix'][...] # Minimum variance mixing matrix
+           iv_mm = f['iv_mmatrix'][...] # Inverse variance mixing matrix
+
+        # Powerspectrum estimator
+        uw_powerspectrum = np.dot(uw_mm, qtotal - bias) # Unwindowed power spectrum
+        uc_powerspectrum = np.dot(uc_mm, qtotal - bias) # Uncorrelated power spectrum
+        mv_powerspectrum = np.dot(mv_mm, qtotal - bias) # Minimum variance power spectrum
+        iv_powerspectrum = np.dot(iv_mm, qtotal - bias) # Inverse variance power spectrum
 
 
         if mpiutil.rank0:
@@ -758,23 +759,9 @@ class Timestream(object):
 
             with h5py.File(self._psfile, 'a') as f:
 
-#                 cv = la.inv(fisher)
-#                 err = cv.diagonal()**0.5
-#                 cr = cv / np.outer(err, err)
-
-#                 f.create_dataset('fisher/', data=fisher)
-# #                f.create_dataset('bias/', data=self.bias)
-#                 f.create_dataset('covariance/', data=cv)
-#                 f.create_dataset('error/', data=err)
-#                 f.create_dataset('correlation/', data=cr)
-
-#                 f.create_dataset('bandpower/', data=ps.band_power)
-#                 #f.create_dataset('k_start/', data=ps.k_start)
-#                 #f.create_dataset('k_end/', data=ps.k_end)
-#                 #f.create_dataset('k_center/', data=ps.k_center)
-#                 #f.create_dataset('psvalues/', data=ps.psvalues)
-
                 f.create_dataset('uw_powerspectrum', data=uw_powerspectrum.real)
+                f.create_dataset('uc_powerspectrum', data=uc_powerspectrum.real)
+                f.create_dataset('mv_powerspectrum', data=mv_powerspectrum.real)
                 f.create_dataset('iv_powerspectrum', data=iv_powerspectrum.real)
 
         # Delete cache of bands for memory reasons

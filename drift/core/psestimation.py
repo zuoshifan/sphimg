@@ -587,24 +587,51 @@ class PSEstimation(config.Reader):
 
             # Check to see ensure that Fisher matrix isn't all zeros.
             if not (self.fisher == 0).all():
-                # Generate derived quantities (covariance, errors..)
+                # Generate derived quantities (covariance, errors, correlation, mixing matrix and window function)
+
                 # Unwindowed method
                 uw_cv = la.inv(self.fisher)
                 uw_err = uw_cv.diagonal()**0.5
                 uw_cr = uw_cv / np.outer(uw_err, uw_err)
+                uw_mm = uw_cv
+                uw_wf = np.eye(uw_cv.shape[0], dtype=uw_cv.dtype)
+
+                # Uncorrelated methods
+                # square root of fisher matrix
+                sqrt_fisher = hermi_matrix_root_eigh(self.fisher)
+                inv_sqrt_fisher = la.inv(sqrt_fisher)
+                uc_cv = np.zeros_like(self.fisher)
+                uc_mm = np.zeros_like(self.fisher)
+                uc_wf = np.zeros_like(self.fisher)
+                for ia in range(self.nbands):
+                    uc_cv[ia, ia] = np.sum(sqrt_fisher[ia, :])**(-2)
+                    for ib in range(self.nbands):
+                        uc_mm[ia, ib] = inv_sqrt_fisher[ia, ib] / np.sum(sqrt_fisher[ia, :])
+                        uc_wf[ia, ib] = sqrt_fisher[ia, ib] / np.sum(sqrt_fisher[ia, :])
+                uc_err = uc_cv.diagonal()**0.5
+                uc_cr = uc_cv / np.outer(uc_err, uc_err)
+
+                # Minimum variance method
+                mv_cv = np.zeros_like(self.fisher)
+                mv_mm = np.zeros_like(self.fisher)
+                mv_wf = np.zeros_like(self.fisher)
+                for ia in range(self.nbands):
+                    mv_mm[ia, ia] = 1.0 / np.sum(self.fisher[ia, :])
+                    for ib in range(self.nbands):
+                        mv_cv[ia, ib] = self.fisher[ia, ib] / (np.sum(self.fisher[ia, :]) * np.sum(self.fisher[ib, :]))
+                        mv_wf[ia, ib] = self.fisher[ia, ib] / np.sum(self.fisher[ia, :])
+                mv_err = mv_cv.diagonal()**0.5
+                mv_cr = mv_cv / np.outer(mv_err, mv_err)
+
                 # Inverse variance method
-                iv_bias = np.zeros_like(self.bias)
                 iv_cv = np.zeros_like(self.fisher)
+                iv_mm = np.zeros_like(self.fisher)
                 iv_wf = np.zeros_like(self.fisher) # window function
                 for ia in range(self.nbands):
-                    iv_bias[ia] = self.bias[ia] / self.fisher[ia, ia]
-                    iv_cv[ia, ia] = 1.0 / self.fisher[ia, ia]
-                    iv_wf[ia, ia] = 1.0
-                    for ib in range(ia):
+                    iv_mm[ia, ia] = 1.0 / self.fisher[ia, ia]
+                    for ib in range(self.nbands):
                         iv_cv[ia, ib] = self.fisher[ia, ib] / (self.fisher[ia, ia] * self.fisher[ib, ib])
-                        iv_cv[ib, ia] = np.conj(iv_cv[ia, ib])
                         iv_wf[ia, ib] = self.fisher[ia, ib] / self.fisher[ia, ia]
-                        iv_wf[ib, ia] = np.conj(iv_wf[ia, ib])
                 iv_err = iv_cv.diagonal()**0.5
                 iv_cr = iv_cv / np.outer(iv_err, iv_err)
             else:
@@ -612,11 +639,28 @@ class PSEstimation(config.Reader):
                 uw_cv = np.zeros_like(self.fisher)
                 uw_err = uw_cv.diagonal()
                 uw_cr = np.zeros_like(self.fisher)
+                uw_mm = np.zeros_like(self.fisher)
+                uw_wf = np.zeros_like(self.fisher)
+
+                # Uncorrelated methods
+                uc_cv = np.zeros_like(self.fisher)
+                uc_err = uc_cv.diagonal()
+                uc_cr = np.zeros_like(self.fisher)
+                uc_mm = np.zeros_like(self.fisher)
+                uc_wf = np.zeros_like(self.fisher)
+
+                # Minimum variance method
+                mv_cv = np.zeros_like(self.fisher)
+                mv_err = mv_cv.diagonal()
+                mv_cr = np.zeros_like(self.fisher)
+                mv_mm = np.zeros_like(self.fisher)
+                mv_wf = np.zeros_like(self.fisher)
+
                 # Inverse variance method
-                iv_bias = np.zeros_like(self.bias)
                 iv_cv = np.zeros_like(self.fisher)
                 iv_err = uw_cv.diagonal()
                 iv_cr = np.zeros_like(self.fisher)
+                iv_mm = np.zeros_like(self.fisher)
                 iv_wf = np.zeros_like(self.fisher)
 
             # f = h5py.File(self.psdir + '/fisher.hdf5', 'w')
@@ -625,18 +669,34 @@ class PSEstimation(config.Reader):
 
                 f.create_dataset('band_power/', data=self.band_power)
                 f.create_dataset('fisher/', data=self.fisher)
+                f.create_dataset('bias/', data=self.bias)
 
                 # Unwindowed
-                f.create_dataset('uw_bias/', data=self.bias)
                 f.create_dataset('uw_covariance/', data=uw_cv)
                 f.create_dataset('uw_errors/', data=uw_err.real)
                 f.create_dataset('uw_correlation/', data=uw_cr)
+                f.create_dataset('uw_mmatrix/', data=uw_mm)
+                f.create_dataset('uw_wfunction/', data=uw_wf)
+
+                # Uncorrelated
+                f.create_dataset('uc_covariance/', data=uc_cv)
+                f.create_dataset('uc_errors/', data=uc_err.real)
+                f.create_dataset('uc_correlation/', data=uc_cr)
+                f.create_dataset('uc_mmatrix/', data=uc_mm)
+                f.create_dataset('uc_wfunction/', data=uc_wf)
+
+                # Minimum variance
+                f.create_dataset('mv_covariance/', data=mv_cv)
+                f.create_dataset('mv_errors/', data=mv_err.real)
+                f.create_dataset('mv_correlation/', data=mv_cr)
+                f.create_dataset('mv_mmatrix/', data=mv_mm)
+                f.create_dataset('mv_wfunction/', data=mv_wf)
 
                 # Inverse variance
-                f.create_dataset('iv_bias/', data=iv_bias)
                 f.create_dataset('iv_covariance/', data=iv_cv)
                 f.create_dataset('iv_errors/', data=iv_err.real)
                 f.create_dataset('iv_correlation/', data=iv_cr)
+                f.create_dataset('iv_mmatrix/', data=iv_mm)
                 f.create_dataset('iv_wfunction/', data=iv_wf)
 
                 if self.bandtype == 'polar':
@@ -686,7 +746,7 @@ class PSEstimation(config.Reader):
     def fisher_bias(self):
 
         with h5py.File(self._psfile, 'r') as f:
-            return f['fisher'][:], f['uw_bias'][:]
+            return f['fisher'][:], f['bias'][:]
 
     #===================================================
 
