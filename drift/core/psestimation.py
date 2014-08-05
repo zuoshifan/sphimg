@@ -4,6 +4,7 @@
 import os
 import abc
 import time
+import warnings
 
 import h5py
 import numpy as np
@@ -16,6 +17,73 @@ from drift.util import mpiutil, util, config
 from drift.util import typeutil
 
 # from mpi4py import MPI
+
+
+def hermi_matrix_root_svd(a, threshold = 0.0, overwrite_a=False, check_finite=True):
+    """Square root a Hermitian (or real symmetric) matrix.
+
+    Using SVD (Singular Value Decomposition) method to get the square root of a Hermitian matix. This sets small and negative eigenvalue to zero if required.
+
+    Parameters
+    ==========
+    a : (M, M) array_like
+        Matrix to compute.
+    threshold : scalar, optional
+        Set any singularvalues a factor `threshold` smaller than the largest singularvalue to zero.
+    overwrite : bool, optional
+        Whether to overwrite a; may improve performance. Default is False.
+    check_finite : boolean, optional
+        Whether to check that the input matrix contains only finite numbers. Disabling may give a performance gain, but may result in problems (crashes, non-termination) if the inputs do contain infinities or NaNs.
+
+    Returns
+    =======
+    root : (M, M) ndarray
+        The square root matrix.
+    """
+    if not np.allclose(a, a.T.conj()):
+        warnings.warn("Not a hermitian (or real symmetric) matrix", RuntimeWarning)
+    U, s, Vh = la.svd(a, full_matrices=True, compute_uv=True, overwrite_a=overwrite_a, check_finite=check_finite)
+    if not np.allclose(U, Vh.T.conj()):
+        warnings.warn("Matrix square root may not correctly computed", RuntimeWarning)
+    cut = s.max() * threshold
+    if np.any(s < cut):
+        warnings.warn("Any singularvalue less than %f has been set to zero." % cut, RuntimeWarning)
+    s[np.where(s < cut)] = 0.0
+    S_root = la.diagsvd(s**0.5, a.shape[0], a.shape[0])
+
+    return np.dot(np.dot(U, S_root), Vh)
+
+
+def hermi_matrix_root_eigh(a, threshold = 0.0, overwrite_a=False, check_finite=True):
+    """Square root a Hermitian (or real symmetric) matrix.
+
+    Using eigen-decomposition method to get the square root of a Hermitian matix. This sets small and negative eigenvalue to zero if required.
+
+    Parameters
+    ==========
+    a : (M, M) array_like
+        Matrix to compute.
+    threshold : scalar, optional
+        Set any eigenvalues a factor `threshold` smaller than the largest eigenvalue to zero.
+    overwrite : bool, optional
+        Whether to overwrite a; may improve performance. Default is False.
+    check_finite : boolean, optional
+        Whether to check that the input matrix contains only finite numbers. Disabling may give a performance gain, but may result in problems (crashes, non-termination) if the inputs do contain infinities or NaNs.
+
+    Returns
+    =======
+    root : (M, M) ndarray
+        The square root matrix.
+    """
+    if not np.allclose(a, a.T.conj()):
+        warnings.warn("Not a hermitian (or real symmetric) matrix", RuntimeWarning)
+    evals, evecs = la.eigh(a, overwrite_a=overwrite_a, check_finite=check_finite)
+    cut = evals.max() * threshold
+    if np.any(evals < cut):
+        warnings.warn("Any eigenvalue less than %f has been set to zero." % cut, RuntimeWarning)
+    evals[np.where(evals < cut)] = 0.0
+
+    return np.dot(np.dot(evecs, np.diag(evals**0.5)), evecs.T.conj())
 
 
 

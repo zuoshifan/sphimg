@@ -1,3 +1,4 @@
+import warnings
 from numpy.core.numeric import newaxis, concatenate, array, dot
 import numpy as np
 
