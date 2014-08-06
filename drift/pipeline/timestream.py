@@ -817,8 +817,23 @@ def cross_powerspectrum(timestreams, psname, psfile):
     # Subtract bias and reshape into new array
     qtotal = (qtotal - bias).reshape(nstream**2, ps.nbands).T
 
-    powerspectrum =  np.dot(la.inv(fisher), qtotal)
-    powerspectrum = powerspectrum.T.reshape(nstream, nstream, ps.nbands)
+    # Get mixing matrix
+    with h5py.File(ps._psfile, 'r') as f:
+       uw_mm = f['uw_mmatrix'][...] # Unwindowed mixing matrix
+       uc_mm = f['uc_mmatrix'][...] # Uncorrelated mixing matrix
+       mv_mm = f['mv_mmatrix'][...] # Minimum variance mixing matrix
+       iv_mm = f['iv_mmatrix'][...] # Inverse variance mixing matrix
+
+    # Powerspectrum estimator
+    uw_powerspectrum = np.dot(uw_mm, qtotal) # Unwindowed power spectrum
+    uc_powerspectrum = np.dot(uc_mm, qtotal) # Uncorrelated power spectrum
+    mv_powerspectrum = np.dot(mv_mm, qtotal) # Minimum variance power spectrum
+    iv_powerspectrum = np.dot(iv_mm, qtotal) # Inverse variance power spectrum
+
+    uw_powerspectrum = uw_powerspectrum.T.reshape(nstream, nstream, ps.nbands)
+    uc_powerspectrum = uc_powerspectrum.T.reshape(nstream, nstream, ps.nbands)
+    mv_powerspectrum = mv_powerspectrum.T.reshape(nstream, nstream, ps.nbands)
+    iv_powerspectrum = iv_powerspectrum.T.reshape(nstream, nstream, ps.nbands)
 
 
     if mpiutil.rank0:
@@ -830,7 +845,10 @@ def cross_powerspectrum(timestreams, psname, psfile):
         shutil.copyfile(ps._psfile, psfile)
 
         with h5py.File(psfile, 'a') as f:
-            f.create_dataset('powerspectrum', data=powerspectrum.real)
+            f.create_dataset('uw_powerspectrum', data=uw_powerspectrum.real)
+            f.create_dataset('uc_powerspectrum', data=uc_powerspectrum.real)
+            f.create_dataset('mv_powerspectrum', data=mv_powerspectrum.real)
+            f.create_dataset('iv_powerspectrum', data=iv_powerspectrum.real)
 
     mpiutil.barrier()
 
