@@ -318,4 +318,3 @@ def nonnegative_float_or_non_empty_list(lst):
         raise e
     except ValueError:
         raise ValueError('Require a non-negative float number or a non-empty list of non-negative float numbers.')
-

@@ -179,7 +179,7 @@ class TransitTelescope(config.Reader):
 
     def __init__(self, latitude=45, longitude=0):
         """Initialise a telescope object.
-        
+
         Parameters
         ----------
         latitude, longitude : scalar
@@ -203,8 +203,8 @@ class TransitTelescope(config.Reader):
                 del state[key]
 
         return state
-            
-    
+
+
 
     #========= Properties related to baselines =========
 
@@ -241,9 +241,9 @@ class TransitTelescope(config.Reader):
         """The number of unique feed pairs."""
         return self.uniquepairs.shape[0]
 
-    
+
     _uniquepairs = None
-    
+
     @property
     def uniquepairs(self):
         """An (npairs, 2) array of the feed pairs corresponding to each baseline."""
@@ -288,13 +288,13 @@ class TransitTelescope(config.Reader):
             self.calculate_feedpairs()
 
         return self._feedconj
-    
+
     #===================================================
 
 
 
     #======== Properties related to frequencies ========
-    
+
     _frequencies = None
 
     @property
@@ -324,7 +324,7 @@ class TransitTelescope(config.Reader):
 
 
 
-    
+
     #======== Properties related to the feeds ==========
 
     @property
@@ -365,10 +365,10 @@ class TransitTelescope(config.Reader):
 
     #===================================================
 
-    
+
 
     #== Methods for calculating the unique baselines ===
-    
+
     def calculate_feedpairs(self):
         """Calculate all the unique feedpairs and their redundancies, and set
         the internal state of the object.
@@ -376,7 +376,7 @@ class TransitTelescope(config.Reader):
 
         # Get unique pairs, and create mapping arrays
         self._feedmap, self._feedmask = self._get_unique()
-        
+
         # Identify conjugate pairs
         self._feedconj = np.tril(np.ones_like(self._feedmap), -1).astype(np.bool)
 
@@ -457,7 +457,7 @@ class TransitTelescope(config.Reader):
 
     def _get_unique(self):
         """Calculate the unique baseline pairs.
-        
+
         All feeds are assumed to be identical. Baselines are identified if
         they have the same length, and are selected such that they point East
         (to ensure that the sensitivity ends up in positive-m modes).
@@ -478,17 +478,17 @@ class TransitTelescope(config.Reader):
             For each unique pair, give the number of equivalent pairs.
         """
 
-        # Fetch and merge map of unique feed pairs        
+        # Fetch and merge map of unique feed pairs
         base_map, base_mask = self._unique_baselines()
         beam_map, beam_mask = self._unique_beams()
         comb_map, comb_mask = _merge_keyarray(base_map, beam_map, mask1=base_mask, mask2=beam_mask)
 
-        # Take into account conjugation by identifying 
+        # Take into account conjugation by identifying
         comb_map = np.dstack((comb_map, comb_map.T)).min(axis=-1)
         comb_map = _remap_keyarray(comb_map, comb_mask)
 
         return comb_map, comb_mask
- 
+
 
     def _sort_pairs(self):
         """Re-order keys into a desired sort order.
@@ -541,7 +541,7 @@ class TransitTelescope(config.Reader):
 
 
     #==== Methods for calculating Transfer matrices ====
-        
+
     def transfer_matrices(self, bl_indices, f_indices, global_lmax = True):
         """Calculate the spherical harmonic transfer matrices for baseline and
         frequency combinations.
@@ -606,7 +606,7 @@ class TransitTelescope(config.Reader):
 
     def transfer_for_frequency(self, freq):
         """Fetch all transfer matrices for a given frequency.
-        
+
         Parameters
         ----------
         freq : integer
@@ -625,7 +625,7 @@ class TransitTelescope(config.Reader):
 
     def transfer_for_baseline(self, baseline):
         """Fetch all transfer matrices for a given baseline.
-        
+
         Parameters
         ----------
         baseline : integer
@@ -647,7 +647,7 @@ class TransitTelescope(config.Reader):
 
     #======== Noise properties of the telescope ========
 
-    
+
     def tsys(self, f_indices = None):
         """The system temperature.
 
@@ -676,7 +676,7 @@ class TransitTelescope(config.Reader):
 
         Assume we are still within the regime where the power spectrum is white
         in `m` modes.
-        
+
         Parameters
         ----------
         bl_indices : array_like
@@ -694,7 +694,7 @@ class TransitTelescope(config.Reader):
         """
 
         ndays = self.ndays if not ndays else ndays # Set to value if not set.
-        
+
         # Broadcast arrays against each other
         bl_indices, f_indices = np.broadcast_arrays(bl_indices, f_indices)
 
@@ -724,7 +724,7 @@ class TransitTelescope(config.Reader):
     def _init_trans(self, nside):
         ## Internal function for generating some common Healpix maps (position,
         ## horizon). These should need to be generated only when nside changes.
-        
+
         # Angular positions in healpix map of nside
         self._nside = nside
         self._angpos = hputil.ang_positions(nside)
@@ -752,7 +752,7 @@ class TransitTelescope(config.Reader):
         """An nfeed array of the class of each beam (identical labels are
         considered to have identical beams)."""
         return
-    
+
     # Implement to specify feed positions in the telescope.
     @abc.abstractproperty
     def u_width(self):
@@ -773,7 +773,7 @@ class TransitTelescope(config.Reader):
     @abc.abstractmethod
     def _transfer_single(self, bl_index, f_index, lmax, lside):
         """Calculate transfer matrix for a single baseline+frequency.
-        
+
         **Abstract method** must be implemented.
 
         Parameters
@@ -815,11 +815,11 @@ class UnpolarisedTelescope(TransitTelescope):
     __metaclass__ = abc.ABCMeta
 
     _npol_sky_ = 1
-    
+
     @abc.abstractmethod
     def beam(self, feed, freq):
         """Beam for a particular feed.
-        
+
         Parameters
         ----------
         feed : integer
@@ -834,12 +834,12 @@ class UnpolarisedTelescope(TransitTelescope):
             complex.
         """
         return
-    
+
 
     #===== Implementations of abstract functions =======
 
     def _beam_map_single(self, bl_index, f_index):
-        
+
         # Get beam maps for each feed.
         feedi, feedj = self.uniquepairs[bl_index]
         beami, beamj = self.beam(feedi, f_index), self.beam(feedj, f_index)
@@ -858,7 +858,7 @@ class UnpolarisedTelescope(TransitTelescope):
 
 
     def _transfer_single(self, bl_index, f_index, lmax, lside):
-        
+
         if self._nside != hputil.nside_for_lmax(lmax, accuracy_boost=self.accuracy_boost):
             self._init_trans(hputil.nside_for_lmax(lmax, accuracy_boost=self.accuracy_boost))
 
@@ -876,8 +876,8 @@ class UnpolarisedTelescope(TransitTelescope):
         """Calculate the instrumental noise power spectrum.
 
         Assume we are still within the regime where the power spectrum is white
-        in `m` modes. 
-        
+        in `m` modes.
+
         Parameters
         ----------
         bl_indices : array_like
@@ -903,17 +903,17 @@ class UnpolarisedTelescope(TransitTelescope):
 
 class PolarisedTelescope(TransitTelescope):
     """A base for a polarised telescope.
-    
+
     Again, an abstract class, but the only things that require implementing are
     the `feedpositions`, `_get_unique` and the beam functions `beamx` and `beamy`.
-    
+
     Abstract Methods
     ----------------
     beamx, beamy : methods
         Routines giving the field pattern for the x and y feeds.
     """
     __metaclass__ = abc.ABCMeta
-    
+
     _npol_sky_ = 4
 
 
@@ -928,20 +928,20 @@ class PolarisedTelescope(TransitTelescope):
         # Get beam maps for each feed.
         feedi, feedj = self.uniquepairs[bl_index]
         beami, beamj = self.beam(feedi, f_index), self.beam(feedj, f_index)
-        
+
         # Get baseline separation and fringe map.
         uv = self.baselines[bl_index] / self.wavelengths[f_index]
         fringe = visibility.fringe(self._angpos, self.zenith, uv)
 
         pow_stokes = [ np.sum(beami * np.dot(beamj, polproj), axis=1) * self._horizon for polproj in p_stokes]
-        
+
         pxarea = (4*np.pi / beami.shape[0])
 
         om_i = np.sum(np.abs(beami)**2 * self._horizon[:, np.newaxis]) * pxarea
         om_j = np.sum(np.abs(beamj)**2 * self._horizon[:, np.newaxis]) * pxarea
 
         omega_A = (om_i * om_j)**0.5
-        
+
         cv_stokes = [ p * (2 * fringe / omega_A) for p in pow_stokes ]
 
         return cv_stokes
@@ -966,10 +966,10 @@ class PolarisedTelescope(TransitTelescope):
 
 class SimpleUnpolarisedTelescope(UnpolarisedTelescope):
     """A base for a polarised telescope.
-    
+
     Again, an abstract class, but the only things that require implementing are
     the `feedpositions`, `_get_unique` and the beam functions `beamx` and `beamy`.
-    
+
     Abstract Methods
     ----------------
     beamx, beamy : methods
@@ -977,7 +977,7 @@ class SimpleUnpolarisedTelescope(UnpolarisedTelescope):
     """
 
     __metaclass__ = abc.ABCMeta
-    
+
 
     @property
     def beamclass(self):
@@ -1000,10 +1000,10 @@ class SimpleUnpolarisedTelescope(UnpolarisedTelescope):
 
 class SimplePolarisedTelescope(PolarisedTelescope):
     """A base for a polarised telescope.
-    
+
     Again, an abstract class, but the only things that require implementing are
     the `feedpositions`, `_get_unique` and the beam functions `beamx` and `beamy`.
-    
+
     Abstract Methods
     ----------------
     beamx, beamy : methods
@@ -1011,7 +1011,7 @@ class SimplePolarisedTelescope(PolarisedTelescope):
     """
 
     __metaclass__ = abc.ABCMeta
-    
+
 
     @property
     def beamclass(self):
@@ -1039,7 +1039,7 @@ class SimplePolarisedTelescope(PolarisedTelescope):
     @abc.abstractmethod
     def beamx(self, feed, freq):
         """Beam for the X polarisation feed.
-        
+
         Parameters
         ----------
         feed : integer
@@ -1051,13 +1051,13 @@ class SimplePolarisedTelescope(PolarisedTelescope):
         -------
         beam : np.ndarray
             Healpix maps (of size [self._nside, 2]) of the field pattern in the
-            theta and phi directions.         
+            theta and phi directions.
         """
 
     @abc.abstractmethod
     def beamy(self, feed, freq):
         """Beam for the Y polarisation feed.
-        
+
         Parameters
         ----------
         feed : integer
@@ -1069,5 +1069,5 @@ class SimplePolarisedTelescope(PolarisedTelescope):
         -------
         beam : np.ndarray
             Healpix maps (of size [self._nside, 2]) of the field pattern in the
-            theta and phi directions.         
+            theta and phi directions.
         """

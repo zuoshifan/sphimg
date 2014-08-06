@@ -24,7 +24,7 @@ def foreground_model(lmax, frequencies, npol, pol_frac=1.0, pol_length=None):
 
     fsyn = galaxy.FullSkySynchrotron()
     fps = PointSources()
-    
+
     nfreq = frequencies.size
 
     cv_fg = np.zeros((npol, npol, lmax+1, nfreq, nfreq))
@@ -53,11 +53,11 @@ def im21cm_model(lmax, frequencies, npol, cr = None, temponly=False):
     if not cr:
         global _cr
         if not _cr:
-            if not _reionisation:    
+            if not _reionisation:
                 _cr = corr21cm.Corr21cm()
             else:
                 _cr = corr21cm.EoR21cm()
-        cr = _cr    
+        cr = _cr
 
     #cr._freq_window = np.abs(cr.cosmology.comoving_distance(frequencies[0]) - cr.cosmology.comoving_distance(frequencies[1]))
 
@@ -69,4 +69,3 @@ def im21cm_model(lmax, frequencies, npol, cr = None, temponly=False):
         cv_sg = np.zeros((npol, npol, lmax+1, nfreq, nfreq))
         cv_sg[0, 0] = cv_t
         return cv_sg
-

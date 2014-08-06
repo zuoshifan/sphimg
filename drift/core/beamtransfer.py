@@ -15,7 +15,6 @@ Classes
 
 """
 
-# import pickle
 try:
    import cPickle as pickle
 except ImportError:
@@ -212,14 +211,11 @@ class BeamTransfer(object):
 
     @property
     def _mdir(self):
-        # Pattern to form the `m` ordered file.
-        # pat = self.directory + "/beam_m/" + util.natpattern(self.telescope.mmax)
-        # return pat % abs(mi)
+        # Directory to save `m` ordered beam transfer matrix files
         return self.directory + '/beam_m/'
 
     def _mfile(self, mi):
-        # Pattern to form the `m` ordered file.
-        # return self._mdir(mi) + '/beam.hdf5'
+        # Pattern to form the `m` ordered beam transfer matrix file
         pat = self._mdir + 'beam_%s.hdf5' % util.natpattern(self.telescope.mmax)
         return pat % abs(mi)
 
@@ -238,12 +234,11 @@ class BeamTransfer(object):
 
     @property
     def _svddir(self):
+        # Directory to save `m` ordered svd beam files
         return self.directory + '/svd_m/'
 
     def _svdfile(self, mi):
-        # Pattern to form the `m` ordered file.
-        # pat = self.directory + "/beam_m/" + util.natpattern(self.telescope.mmax) + "/svd.hdf5"
-        # return pat % mi
+        # Pattern to form the `m` ordered svd beam file
         pat = self._svddir + 'svd_%s.hdf5' % util.natpattern(self.telescope.mmax)
         return pat % abs(mi)
 
@@ -577,10 +572,8 @@ class BeamTransfer(object):
             Force regeneration even if cache files exist (default: False).
         """
 
-        # st = time.time()
-
         self._generate_dirs()
-        #self._generate_ffiles(regen)
+        # self._generate_ffiles(regen)
         self._generate_teldatafile(regen)
 
         st = time.time()
@@ -609,13 +602,6 @@ class BeamTransfer(object):
         # If we're part of an MPI run, synchronise here.
         mpiutil.barrier()
 
-        # et = time.time()
-
-        # if mpiutil.rank0:
-        #     print "***** Beam generation time: %f" % (et - st)
-
-        # mpiutil.barrier()
-
 
     generate_cache = generate # For compatibility with old code
 
@@ -640,13 +626,6 @@ class BeamTransfer(object):
             # Create directories for svd files if need to do SVD projection
             if not os.path.exists(self._svddir) and self.svdproj:
                 os.makedirs(self._svddir)
-
-            # for mi in range(self.telescope.mmax + 1):
-            #     dirname = self._mdir(mi)
-
-            #     # Create directory if required
-            #     if not os.path.exists(dirname):
-            #         os.makedirs(dirname)
 
         mpiutil.barrier()
 
@@ -711,7 +690,6 @@ class BeamTransfer(object):
                 print
                 print '=' * 80
                 print 'File %s exists. Skipping...' % self._tel_datafile
-                # return
             else:
                 print
                 print '=' * 80
@@ -761,9 +739,6 @@ class BeamTransfer(object):
         lm, sm, em = mpiutil.split_local(self.telescope.mmax+1)
 
         # Iterate over all m's and create the hdf5 files we will write into.
-        # dsize = (self.telescope.nfreq, 2, self.telescope.nbase, self.telescope.num_pol_sky, self.telescope.lmax+1)
-        # csize = (1, 2, min(10, self.telescope.nbase), self.telescope.num_pol_sky, self.telescope.lmax+1)
-
         for mi in mpiutil.mpirange(self.telescope.mmax + 1):
 
             # don't save all zero values for `l` < `m` to save disk space
@@ -772,11 +747,8 @@ class BeamTransfer(object):
 
             with h5py.File(self._mfile(mi), 'w') as f:
                 f.create_dataset('beam_m', dsize, chunks=csize, compression='lzf', dtype=np.complex128)
-                # Write a few useful attributes.
-                # f.attrs['baselines'] = self.telescope.baselines
+                # Write useful attributes.
                 f.attrs['m'] = mi
-                # f.attrs['frequencies'] = self.telescope.frequencies
-                # f.attrs['cylobj'] = self._telescope_pickle
 
         mpiutil.barrier()
 
@@ -869,26 +841,10 @@ class BeamTransfer(object):
             mpiutil.barrier()
             return
 
-        # completed_mlist = []
-        # mlist_file = self._svddir + 'COMPLETED_SVDLIST'
-        # if os.path.exists(mlist_file) and mpiutil.rank0:
-        #     for mi in open(mlist_file, 'r'):
-        #         completed_mlist.append(int(mi))
-        # mlist_file = mpiutil.bcast(mlist_file, root=0)
-        # print 'size(mlist_flie) = %d for %d.' % (len(mlist_file), mpiutil.rank)
-
         if mpiutil.rank0:
             print
             print '=' * 80
             print 'Create beam transfer svd-files...'
-
-        # Data shape for writing the SVD beam matrix into.
-        # dsize_bsvd = (self.telescope.nfreq, self.svd_len, self.telescope.num_pol_sky, self.telescope.lmax+1)
-        # csize_bsvd = (1, min(10, self.svd_len), self.telescope.num_pol_sky, self.telescope.lmax+1)
-
-        # Data shape for writing the inverse SVD beam matrix into.
-        # dsize_ibsvd = (self.telescope.nfreq, self.telescope.num_pol_sky, self.telescope.lmax+1, self.svd_len)
-        # csize_ibsvd = (1, self.telescope.num_pol_sky, self.telescope.lmax+1, min(10, self.svd_len))
 
         # Data shape for the stokes T U-matrix (left evecs)
         dsize_ut = (self.telescope.nfreq, self.svd_len, self.ntel)
@@ -908,12 +864,6 @@ class BeamTransfer(object):
             # else:
             #     print 'Creating SVD file: %s' % self._svdfile(mi)
 
-            # Open m beams for reading.
-            # fm = h5py.File(self._mfile(mi), 'r')
-
-            # Open file to write SVD results into.
-            # fs = h5py.File(self._svdfile(mi), 'w')
-
             # Open m beams for reading and file to write SVD results into.
             with h5py.File(self._mfile(mi), 'r') as fm, h5py.File(self._svdfile(mi), 'w') as fs:
 
@@ -922,18 +872,9 @@ class BeamTransfer(object):
                 csize_bsvd = (1, min(10, self.svd_len), self.telescope.num_pol_sky, self.telescope.lmax+1 - mi)
                 dset_bsvd = fs.create_dataset('beam_svd', dsize_bsvd, chunks=csize_bsvd, compression='lzf', dtype=np.complex128)
 
-                # Create a chunked dataset for writing the inverse SVD beam matrix into.
-                # dsize_ibsvd = (self.telescope.nfreq, self.telescope.num_pol_sky, self.telescope.lmax+1, self.svd_len)
-                # csize_ibsvd = (1, self.telescope.num_pol_sky, self.telescope.lmax+1, min(10, self.svd_len))
-                # dset_ibsvd = fs.create_dataset('invbeam_svd', dsize_ibsvd, chunks=csize_ibsvd, compression='lzf', dtype=np.complex128)
-
-                # Create a chunked dataset for the stokes T U-matrix (left evecs)
-                # dsize_ut = (self.telescope.nfreq, self.svd_len, self.ntel)
-                # csize_ut = (1, min(10, self.svd_len), self.ntel)
                 dset_ut  = fs.create_dataset('beam_ut', dsize_ut, chunks=csize_ut, compression='lzf', dtype=np.complex128)
 
                 # Create a dataset for the singular values.
-                # dsize_sig = (self.telescope.nfreq, self.svd_len)
                 dset_sig  = fs.create_dataset('singularvalues', dsize_sig, dtype=np.float64)
 
                 ## For each frequency in the m-files read in the block, SVD it,
@@ -1005,32 +946,17 @@ class BeamTransfer(object):
                         dset_sig[fi, :nmodes] = sig
 
 
-                # Write a few useful attributes.
-                # fs.attrs['baselines'] = self.telescope.baselines
+                # Write useful attributes.
                 fs.attrs['m'] = mi
-                # fs.attrs['frequencies'] = self.telescope.frequencies
-                # fs.attrs['cylobj'] = self._telescope_pickle
 
-            # fs.close()
-            # fm.close()
-
-            # with open(mlist_file, 'a') as f:
-            #     f.write('%d\n' % mi)
-
-        # print 'Process %d watiting...' % mpiutil.rank
         mpiutil.barrier()
-        # print 'Process %d continue...' % mpiutil.rank
 
         if mpiutil.rank0:
             # Make file marker that the m's have been correctly generated:
             open(completed_file, 'a').close()
 
-        # print 'Process %d completed svd file...' % mpiutil.rank
         # If we're part of an MPI run, synchronise here.
         mpiutil.barrier()
-
-        # Collect the spectrum into a single file.
-        # self._collect_svd_spectrum(regen)
 
 
 
@@ -1115,10 +1041,6 @@ class BeamTransfer(object):
     project_vector_forward = project_vector_sky_to_telescope
 
 
-    # beam_cut = 1.0e-3
-    # beam_cut_list = []
-    # rank_ratio = 0.09
-
     def project_vector_telescope_to_sky(self, mi, vec, rank_ratio, lcut):
         """Invert a vector from the telescope space onto the sky. This is the
         map-making process.
@@ -1140,7 +1062,6 @@ class BeamTransfer(object):
             Sky vector to return.
         """
 
-        # ibeam = self.invbeam_m(mi).reshape((self.nfreq, self.nsky, self.ntel))
         beam = self.beam_m(mi)
         npol = beam.shape[-2]
         lside = beam.shape[-1] # lmax+1 - mi
@@ -1152,56 +1073,28 @@ class BeamTransfer(object):
         lcut1 = min(lcut1, lside + mi) # must have lcut <= lmax
         if mpiutil.rank0 and mi == 0:
             print 'Cut l at %d for lmax = %d, mmax = %d.' % (lcut1-1, lside-1+mi, mmax)
-        # nsky = npol * (lside - mi) # 4 * (lmax + 1 - mi)
         nsky = npol * (lcut1 - mi) # 4 * (lcut + 1 - mi)
         beam = beam[..., :(lcut1 - mi)] # all zero for l < m
-        # beam = beam.reshape(self.nfreq, self.ntel, self.nsky)
         beam = beam.reshape(self.nfreq, self.ntel, nsky)
 
-        # vecb = np.zeros((self.nfreq, self.nsky), dtype=np.complex128)
         vecb = np.zeros((self.nfreq, npol, lside + mi), dtype=np.complex128)
         vec = vec.reshape((self.nfreq, self.ntel))
 
-        # self.noise_weight = False
-        # flag = True
         for fi in range(self.nfreq):
-            # very small value beam matrices will lead to noisy strips in the final maps
-            # if np.max(np.abs(beam[fi].real)) <= self.beam_cut and np.max(np.abs(beam[fi].imag)) <= self.beam_cut:
-            #     self.beam_cut_list.append((mi, fi))
-            #     flag = False
-                # continue
 
             if self.noise_weight:
                 noisew = self.telescope.noisepower(np.arange(self.telescope.npairs), fi).flatten()**(-0.5)
                 noisew = np.concatenate([noisew, noisew])
                 beam[fi] = beam[fi] * noisew[:, np.newaxis]
                 vec[fi] = vec[fi] * noisew
-            # vecb[fi] = np.dot(ibeam[fi], vec[fi, :].reshape(self.ntel))
-            # vecb[fi] = la.lu_solve(la.lu_factor(np.dot(beam[fi].T.conj(), beam[fi])), np.dot(beam[fi].T.conj(), vec[fi]))  # failed for singular matrix
+
             x, resids, rank, s = la.lstsq(np.dot(beam[fi].T.conj(), beam[fi]), np.dot(beam[fi].T.conj(), vec[fi]), cond=1e-6)
             if rank > rank_ratio * self.nsky(0): # max nsky = nsky(0)
-                # vecb[fi] = x
                 for p in range(npol):
                     vecb[fi, p, mi:lcut1] = x[p*(lcut1-mi):(p+1)*(lcut1-mi)]
             else:
-                # if mpiutil.rank0:
                 print 'Rank <= %.1f for m = %d, fi = %d...' % (rank_ratio*self.nsky(0), mi, fi)
-            # print 'beam shape: ', beam[fi].shape
-            # if flag:
-            #     datafile = 'norm.txt'
-            # else:
-            #     datafile = 'anorm.txt'
-            # with open(datafile, 'a') as f:
-            #     # f.write('resids: %s\n' % resids)
-            #     # f.write('rank: %s\n\n' % rank)
-            #     f.write('%s\n' % rank)
-            #     # f.write('s: %s' % s)
-            #     # f.write('cond: %s' % (s[0] / s[-1]))
-            # if mpiutil.rank0:
-            #     print 'For frequency index %d, resids = %s, rank = %s, singular values = %s.' % (fi, resids, rank, s)
 
-        # return vecb.reshape((self.nfreq, self.telescope.num_pol_sky,
-        #                      self.telescope.lmax + 1))
         return vecb
 
     project_vector_backward = project_vector_telescope_to_sky
@@ -1304,8 +1197,6 @@ class BeamTransfer(object):
 
         npol = 1 if temponly else self.telescope.num_pol_sky
 
-        # lside = self.telescope.lmax + 1
-
         # Get the SVD beam matrix
         beam = self.beam_svd(mi)
 
@@ -1349,11 +1240,6 @@ class BeamTransfer(object):
         tmat : np.ndarray [nsvd, nsvd]
             Covariance in SVD basis.
         """
-
-        # with h5py.File(self._svdfile(mi), 'r') as svdfile:
-
-        #     # Get the SVD beam matrix
-        #     beam = svdfile['beam_ut'][...]
 
         beam = self.beam_ut(mi)
 
@@ -1520,8 +1406,6 @@ class BeamTransfer(object):
         # Get the SVD beam matrix
         beam = self.beam_svd(mi)
         lside = beam.shape[-1] # lmax + 1 -mi
-        # if lcut == None, then lcut = lmax
-        # lcut = lcut or lside -1
         if lcut is None:
            lcut = lside - 1 + mi
         mmax = self.telescope.mmax
@@ -1540,21 +1424,12 @@ class BeamTransfer(object):
             for fi in self._svd_freq_iter(mi):
 
                 lvec = vec[svbounds[fi]:svbounds[fi+1]] # Matrix section for this frequency
-                # fbeam = beam[fi, pi, :, :svnum[fi]] # Beam matrix for this frequency and cut
                 fbeam = beam[fi, :svnum[fi], pi, :]
-                # if np.max(fbeam.real) <= self.beam_cut and np.max(fbeam.imag) <= self.beam_cut:
-                # if np.max(fbeam.real) <= 1.0e3 and np.max(fbeam.imag) <= 1.0e3:
-                # if (mi, fi) in self.beam_cut_list:
-                    # continue
                 x, resids, rank, s = la.lstsq(np.dot(fbeam.T.conj(), fbeam), np.dot(fbeam.T.conj(), lvec), cond=1e-6)
                 if rank > rank_ratio * (lside + mi):
                     vecf[fi, pi, mi:lcut1] = x
                 else:
                     print ('Rank <= %.1f for m = %d, fi = %d, pol = {%d}...' % (rank_ratio*(lside + mi), mi, fi, pi)).format('T', 'Q', 'U', 'V')
-
-                # lvec = vec[svbounds[fi]:svbounds[fi+1]] # Matrix section for this frequency
-
-                # vecf[fi, pi] += np.dot(fbeam, lvec)
 
         return vecf
 
@@ -1569,9 +1444,8 @@ class BeamTransfer(object):
         """Degrees of freedom measured by the telescope (per frequency)"""
         return 2 * self.telescope.npairs
 
-    # @property
     def nsky(self, mi):
-        """Degrees of freedom on the sky at each frequency."""
+        """Degrees of freedom on the sky at each frequency and `m`."""
         # return (self.telescope.lmax + 1) * self.telescope.num_pol_sky
         return (self.telescope.lmax+1 - mi) * self.telescope.num_pol_sky
 
@@ -1815,18 +1689,6 @@ class BeamTransferNoSVD(BeamTransfer):
                 self.telescope = pickle.load(f)
             except IOError, UnpicklingError:
                 raise Exception("Could not load Telescope object from disk.")
-
-
-    # def _generate_svdfiles(self, regen=False):
-    #    # Remove self._svddir if it is empty
-    #    try:
-    #       os.rmdir(self._svddir)
-    #    except OSError:
-    #       pass
-
-
-    # def _collect_svd_spectrum(self, regen=False):
-    #     pass
 
 
     def project_matrix_sky_to_svd(self, mi, mat, *args, **kwargs):

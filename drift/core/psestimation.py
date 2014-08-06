@@ -16,7 +16,6 @@ from drift.core import skymodel
 from drift.util import mpiutil, util, config
 from drift.util import typeutil
 
-# from mpi4py import MPI
 
 
 def hermi_matrix_root_svd(a, threshold = 0.0, overwrite_a=False, check_finite=True):
@@ -95,7 +94,7 @@ def bandfunc_2d_polar(ks, ke, ts, te):
 
     def band(k, mu):
 
-        #k = (kpar**2 + kperp**2)**0.5
+        # k = (kpar**2 + kperp**2)**0.5
         theta = np.arccos(mu)
 
         tb = (theta >= ts) * (theta <= te)
@@ -295,8 +294,6 @@ class PSEstimation(config.Reader):
         self.telescope = kltrans.telescope
         self.psname = psname
 
-        # self.psdir = self.kltrans.evdir + '/' + subdir + '/'
-
         if mpiutil.rank0 and not os.path.exists(self._psdir):
             os.makedirs(self._psdir)
 
@@ -323,7 +320,6 @@ class PSEstimation(config.Reader):
         num_evals : integer
         """
 
-        # evals = self.kltrans.modes_m(mi, threshold=self.threshold)[0]
         evals = self.kltrans.evals_m(mi, threshold=self.threshold)
 
         return evals.size if evals is not None else 0
@@ -448,7 +444,6 @@ class PSEstimation(config.Reader):
         sizes = p_bands * bandsize
         displ = s_bands * bandsize
 
-        # MPI.COMM_WORLD.Allgatherv(MPI.IN_PLACE, [self.clarray, sizes, displ, MPI.DOUBLE])
         mpiutil.Allgatherv(mpiutil.IN_PLACE, [self.clarray, sizes, displ, mpiutil.DOUBLE])
 
 
@@ -537,12 +532,6 @@ class PSEstimation(config.Reader):
         regen : boolean, optional
             Force regeneration if products already exist (default `False`).
         """
-
-        # if mpiutil.rank0:
-        #     st = time.time()
-        #     print "======== Starting PS calculation ========"
-
-        # ffile = self.psdir +'/fisher.hdf5'
 
         if os.path.exists(self._psfile) and not regen:
             if mpiutil.rank0:
@@ -663,7 +652,6 @@ class PSEstimation(config.Reader):
                 iv_mm = np.zeros_like(self.fisher)
                 iv_wf = np.zeros_like(self.fisher)
 
-            # f = h5py.File(self.psdir + '/fisher.hdf5', 'w')
             with h5py.File(self._psfile, 'w') as f:
                 f.attrs['bandtype'] = self.bandtype
 
@@ -725,22 +713,9 @@ class PSEstimation(config.Reader):
                     f.create_dataset('kperp_bands', data=self.kperp_bands)
 
 
-            # f.close()
-
         mpiutil.barrier()
 
     #===================================================
-
-
-    # def fisher_file(self):
-    #     """Fetch the h5py file handle for the Fisher matrix.
-
-    #     Returns
-    #     -------
-    #     file : h5py.File
-    #         File pointing at the hdf5 file with the Fisher matrix.
-    #     """
-    #     return h5py.File(self.psdir + 'fisher.hdf5', 'r')
 
 
     def fisher_bias(self):
@@ -858,13 +833,6 @@ class PSExact(PSEstimation):
         klcov : np.ndarray[nevals, nevals]
             Covariance in KL-basis.
         """
-        #print "Projecting to eigenbasis."
-        #nevals = self.kltrans.modes_m(mi, threshold=self.threshold)[0].size
-
-        # if nevals < 1000:
-        #     return self.kltrans.project_sky_matrix_forward_old(mi, self.clarray[bi], self.threshold)
-        # else:
-        #return self.kltrans.project_sky_matrix_forward(mi, self.clarray[bi], self.threshold)
 
         clarray = self.clarray[bi].reshape((1, 1) + self.clarray[bi].shape)
         svdmat = self.kltrans.beamtransfer.project_matrix_sky_to_svd(mi, clarray, temponly=True)
@@ -939,7 +907,7 @@ class PSExact(PSEstimation):
         ## immediately
         if self.num_evals(mi) < 500:# or not os.path.exists:
             proj = self._bp_cache[bi]
-            #proj = self.makeproj(mi, bi)
+            # proj = self.makeproj(mi, bi)
         else:
             with h5py.File(fn, 'r') as f:
                 proj = f['proj'][:]

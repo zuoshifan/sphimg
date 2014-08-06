@@ -39,7 +39,7 @@ class ConfigReader(object):
 
     DEPRECATED!! Use routines from drift.util.config instead.
     """
-    
+
     @classmethod
     def from_config(cls, config, *args, **kwargs):
         """Create an instance of the class from the supplied config dictionary.
@@ -65,7 +65,7 @@ class ConfigReader(object):
         Parameters
         ----------
         config_options : dict
-            Configuration options supplied like this: 
+            Configuration options supplied like this:
             { 'paramkey1' : [ function_to_apply, 'attributename'], 'paramkey2' : ...}
         """
         if not hasattr(self, '_config_dict'):

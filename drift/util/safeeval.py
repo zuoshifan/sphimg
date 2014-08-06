@@ -51,7 +51,7 @@ def is_valid_builtin(name):
 
 def get_node_lineno(node):
     return (node.lineno) and node.lineno or 0
-       
+
 #----------------------------------------------------------------------
 # Restricted AST nodes & builtins.
 #----------------------------------------------------------------------
@@ -192,7 +192,7 @@ class SafeEvalVisitor(object):
       errors = list of SafeEvalError if walk() returned False
 
     Implementation:
-    
+
     The visitor will automatically generate methods for all of the
     available AST node types and redirect them to self.ok or self.fail
     reflecting the configuration in 'unallowed_ast_nodes'. While
@@ -215,7 +215,7 @@ class SafeEvalVisitor(object):
         "Validate each node in AST and return True if AST is 'safe'."
         self.visit(ast)
         return self.errors == []
-        
+
     def visit(self, node, *args):
         "Recursively validate node and all of its children."
         fn = getattr(self, 'visit' + classname(node))
@@ -234,7 +234,7 @@ class SafeEvalVisitor(object):
         elif is_unallowed_attr(name):
             self.errors.append(SafeEvalAttrError( \
                 "access to attribute '%s' is denied" % name, lineno))
-               
+
     def visitGetattr(self, node, *args):
         "Disallow any attempts to access a restricted attribute."
         name = node.attrname
@@ -242,11 +242,11 @@ class SafeEvalVisitor(object):
         if is_unallowed_attr(name):
             self.errors.append(SafeEvalAttrError( \
                 "access to attribute '%s' is denied" % name, lineno))
-            
+
     def ok(self, node, *args):
         "Default callback for 'harmless' AST nodes."
         pass
-    
+
     def fail(self, node, *args):
         "Default callback for unallowed AST nodes."
         lineno = get_node_lineno(node)
@@ -297,7 +297,7 @@ class SafeEvalContextException(SafeEvalException):
         self.keys, self.errors = keys, errors
     def __str__(self):
         return '\n'.join([str(err) for err in self.errors])
-        
+
 class SafeEvalTimeoutException(SafeEvalException):
     """
     Exception class for reporting that code evaluation execeeded
@@ -320,7 +320,7 @@ def exec_timed(code, context, timeout_secs):
     assert(timeout_secs > 0)
 
     signal_finished = False
-    
+
     def alarm(secs):
         def wait(secs):
             for n in xrange(timeout_secs):
@@ -350,15 +350,15 @@ def safe_eval(code, context = {}, timeout_secs = 5):
     enviroment is also validated and is not allowed to contain modules
     or builtins. The following exception will be raised on errors:
 
-      if 'context' contains unallowed objects = 
+      if 'context' contains unallowed objects =
         SafeEvalContextException
 
-      if code is didn't validate and is considered 'unsafe' = 
+      if code is didn't validate and is considered 'unsafe' =
         SafeEvalCodeException
 
       if code did not execute within the given timelimit =
         SafeEvalTimeoutException
-    """   
+    """
     ctx_errkeys, ctx_errors = [], []
     for (key, obj) in context.items():
         if inspect.isbuiltin(obj):
@@ -378,7 +378,7 @@ def safe_eval(code, context = {}, timeout_secs = 5):
         exec_timed(code, context, timeout_secs)
     else:
         raise SafeEvalCodeException(code, checker.errors)
-       
+
 #----------------------------------------------------------------------
 # Basic tests.
 #----------------------------------------------------------------------

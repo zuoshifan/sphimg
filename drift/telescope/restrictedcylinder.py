@@ -8,7 +8,7 @@ def gaussian_fwhm(x, fwhm):
 
     sigma = fwhm / (8.0*np.log(2.0))**0.5
     x2 = x**2 / (2*sigma**2)
-    
+
     return np.exp(-x2)
 
 
@@ -101,5 +101,3 @@ class RestrictedExtra(RestrictedCylinder):
         pos2[:nextra, 1] = self.extra_feeds
 
         return pos2
-
-        

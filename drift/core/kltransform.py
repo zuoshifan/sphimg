@@ -168,7 +168,6 @@ class KLTransform(config.Reader):
     pol_length = config.Property(proptype=typeutil.none_or_positive_float, default=None)
 
     klname = None
-    # evdir = ""
 
     _cvfg = None
     _cvsg = None
@@ -179,7 +178,6 @@ class KLTransform(config.Reader):
 
     def _evfile(self, mi):
         # Pattern to form the `m` ordered file.
-        # return self.evdir + "/ev_m_" + util.natpattern(self.telescope.mmax) + ".hdf5"
         pat = self._evdir + 'ev_m_%s.hdf5' % util.natpattern(self.telescope.mmax)
         return pat % abs(mi)
 
@@ -190,16 +188,8 @@ class KLTransform(config.Reader):
     def __init__(self, bt, klname):
         self.beamtransfer = bt
         self.telescope = self.beamtransfer.telescope
-
-        # subdir = "ev" if subdir is None else subdir
         self.klname = klname
 
-        # Create directory if required
-        # self.evdir = self.beamtransfer.directory + "/" + klname
-        # if mpiutil.rank0 and not os.path.exists(self.evdir):
-        #     os.makedirs(self.evdir)
-
-        # If we're part of an MPI run, synchronise here.
         mpiutil.barrier()
 
 
@@ -411,10 +401,6 @@ class KLTransform(config.Reader):
             # into the EV file.
             self._ev_save_hook(f, evextra)
 
-        # f.close()
-
-        # return evals, evecs
-
 
     def _transform_save(self, regen=False):
         # Perform the KL-transform and save the KL-mode
@@ -433,12 +419,6 @@ class KLTransform(config.Reader):
             print '=' * 80
             print "======== Starting %s calculation ========" % self.klname
 
-        # completed_mlist = []
-        # mlist_file = self._evdir + 'COMPLETED_EVLIST'
-        # if os.path.exists(mlist_file):
-        #     for mi in open(mlist_file, 'r'):
-        #         completed_mlist.append(int(mi))
-
         mpiutil.barrier()
 
         # Iterate list over MPI processes.
@@ -450,15 +430,11 @@ class KLTransform(config.Reader):
             except OSError:
                 pass
 
-            # if os.path.exists(self._evfile % mi) and not regen:
-            # if mi in completed_mlist and not regen:
             if os.path.exists(self._evfile(mi)) and not regen:
                 print "File %s exists. Skipping..." % self._evfile(mi)
                 continue
 
             self._transform_save_m(mi)
-            # with open(mlist_file, 'a') as f:
-            #     f.write('%d\n' % mi)
 
         if mpiutil.rank0:
             # Make file marker that the m's have been correctly generated:
@@ -499,10 +475,8 @@ class KLTransform(config.Reader):
             The full set of eigenvalues across all m-modes.
         """
 
-        # f = h5py.File(self.evdir + "/evals.hdf5", 'r')
         with h5py.File(self._all_evfile, 'r') as f:
             ev = f['evals'][:]
-        # f.close()
 
         return ev
 
@@ -560,8 +534,6 @@ class KLTransform(config.Reader):
         # Collect together the eigenvalues
         self._collect(regen)
 
-        # mpiutil.barrier()
-
 
 
     olddatafile = False
@@ -597,7 +569,6 @@ class KLTransform(config.Reader):
         # If modes not already saved to disk, create file.
         completed_file = self._evdir + 'COMPLETED_EV'
         if not os.path.exists(completed_file):
-            # modes = self.transform_save(mi)
             self._transform_save()
 
         with h5py.File(self._evfile(mi), 'r') as f:
@@ -648,28 +619,8 @@ class KLTransform(config.Reader):
             satisfying S/N > threshold.
         """
 
-        # # If modes not already saved to disk, create file.
-        # completed_file = self._evdir + 'COMPLETED_EV'
-        # if not os.path.exists(completed_file):
-        #     self._transform_save()
-
-        # with h5py.File(self._evfile(mi), 'r') as f:
-        #     # If no modes are in the file, return None, None
-        #     if f['evals'].shape[0] == 0:
-        #         modes = None
-        #     else:
-        #         # Find modes satisfying threshold (if required).
-        #         evals = f['evals'][:]
-        #         startind = np.searchsorted(evals, threshold) if threshold is not None else 0
-
-        #         if startind == evals.size:
-        #             modes = None
-        #         else:
-        #             modes = evals[startind:]
-
-        # return modes
-
         return self.modes_m(mi, threshold)[0]
+
 
     @util.cache_last
     def invmodes_m(self, mi, threshold=None):
@@ -970,4 +921,3 @@ class KLTransform(config.Reader):
 
         # Return the projections (rank=0) or None elsewhere.
         return proj_arr
-

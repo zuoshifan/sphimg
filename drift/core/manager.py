@@ -1,5 +1,3 @@
-
-
 import os.path
 import shutil
 import warnings
@@ -268,7 +266,6 @@ class ProductManager(object):
 
             for psname, psobj in self.psestimators.items():
                 psobj.generate()
-                # psobj.delbands()
 
         if mpiutil.rank0:
             print
@@ -278,7 +275,3 @@ class ProductManager(object):
             print "=           DONE AT LAST!!             ="
             print "=                                      ="
             print "========================================"
-
-
-
-

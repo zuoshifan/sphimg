@@ -156,11 +156,6 @@ class PipelineManager(config.Reader):
 
             ts = self.timestreams[tsname]
 
-            # if os.path.exists(ts._ffile(0)):
-            #     print "Looks like timestream already exists. Skipping...."
-            # else:
-                # m = manager.ProductManager.from_config(simconf['product_directory'])
-                # timestream.simulate(m, ts.directory, **simconf)
             timestream.simulate(self.prodmanager, ts.directory, tsname, **simconf)
 
 

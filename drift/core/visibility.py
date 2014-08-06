@@ -39,9 +39,9 @@ def horizon(sph_arr, zenith):
         The horizon function (including an angular projection term at
         each position).
     """
-    
+
     proj = coord.sph_dot(sph_arr, zenith)
-    
+
     return np.signbit(-proj)
 
 
@@ -67,7 +67,7 @@ def cylinder_beam(sph_arr, zenith, cylwidth):
     """
     # Construct uhat.
     uhatc, vhatc = uv_plane_cart(zenith)
-    
+
     ## Note sinc function is normalised hence lack of pi
     return np.sinc(np.inner(coord.sph_to_cart(sph_arr), cylwidth * uhatc))
 
@@ -102,7 +102,7 @@ def pol_IQU(sph_arr, zenith, feed1, feed2):
     The co-ordinate system defining the polarisation at each point is
     :math:`(\hat{\theta}, \hat{\phi})`.
     """
-    
+
     # Get theta, phi plane at each point.
     t_hat, p_hat = coord.thetaphi_plane_cart(sph_arr)
 
@@ -151,9 +151,7 @@ def fringe(sph_arr, zenith, baseline):
 
     """
     uhatc, vhatc = uv_plane_cart(zenith)
-    
+
     uv = baseline[0] * uhatc + baseline[1] * vhatc
 
     return np.exp(2j*np.pi* np.inner(coord.sph_to_cart(sph_arr), uv))
-    
-

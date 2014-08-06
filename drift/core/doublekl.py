@@ -120,4 +120,3 @@ class DoubleKL(kltransform.KLTransform):
             with h5py.File(self._all_evfile, 'w') as f:
                 f.create_dataset('evals', data=evarray[:, 0], compression='lzf')
                 f.create_dataset('f_evals', data=evarray[:, 1], compression='lzf')
-

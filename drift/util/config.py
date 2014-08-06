@@ -15,7 +15,7 @@ We then extend it to store information about a person with a pet. The
 configuration will be successfully inherited.
 
     >>> class PersonWithPet(Person):
-    ... 
+    ...
     ...     petname = Property(default='Molly', proptype=str)
 
 Let's create a couple of objects from these classes.
@@ -38,7 +38,7 @@ Now let's load the configuration from a dictionary:
 
     >>> person1.read_config(testdict)
     >>> person2.read_config(testdict)
-    
+
 Then we'll print the output to see the updated configuration:
 
     >>> print person1.name, person1.age
@@ -171,4 +171,3 @@ class Reader(object):
                 if isinstance(clsprop, Property) and not propname in assigned_propname:
                     assigned_propname.append(propname)
                     clsprop._from_config(self, config, propname)
-

@@ -25,4 +25,3 @@ def test_blocksvd():
     assert np.allclose(np.dot(ub[1,:,0], ub[1,:,1]), 0.0).all()
 
     assert np.allclose(np.dot(vb[0,:,0], vb[0,:,2]), 0.0).all()
-    

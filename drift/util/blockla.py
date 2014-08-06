@@ -28,9 +28,9 @@ def svd_dm(matrix, full_matrices=True):
     nblocks, n, m = matrix.shape
     dt = matrix.dtype
     k = min(n, m)
-    
+
     sig = np.zeros((nblocks, k), dtype=dt)
-    
+
     if full_matrices:
         u = np.zeros((nblocks, n, n), dtype=dt)
         v = np.zeros((nblocks, m, m), dtype=dt)
@@ -98,7 +98,7 @@ def multiply_dm_dm(matrix1, matrix2):
     nmatrix : (nblocks, n, k) np.ndarray
          An array containing `nblocks` diagonal blocks of size (`n`, `k`).
     """
-   
+
 
     nblocks, n, m = matrix1.shape
     k = matrix2.shape[2]
@@ -131,7 +131,7 @@ def pinv_dm(matrix, *args, **kwargs):
     pinv_matrix : (nblocks, m, n) np.ndarray
          An array containing the pseudo-inverse.
     """
-    
+
     nblocks, n, m = matrix.shape
 
     pinv_matrix = np.empty((nblocks, m, n), dtype=matrix.dtype)
@@ -160,10 +160,10 @@ def inv_dm(matrix, hermi=True, *args, **kwargs):
     inv_matrix : (nblocks, n, n) np.ndarray
          An array containing the inverse or pseudo-inverse.
     """
-    
+
     if matrix.shape[-1] != matrix.shape[-2]:
         raise Exception('Expect a block diagonal square matrix.')
-        
+
     nblocks, n, n = matrix.shape
 
     inv_matrix = np.empty((nblocks, n, n), dtype=matrix.dtype)
@@ -195,7 +195,7 @@ def conj_dm(matrix, *args, **kwargs):
     conj_matrix : (nblocks, m, n) np.ndarray
          An array containing the hermitian (conjugate) transpose.
     """
-    
+
     nblocks, n, m = matrix.shape
 
     conj_matrix = np.empty((nblocks, m, n), dtype=matrix.dtype)
@@ -204,4 +204,3 @@ def conj_dm(matrix, *args, **kwargs):
         conj_matrix[i] = matrix[i].T.conj()
 
     return conj_matrix
-

@@ -53,7 +53,7 @@ class TestConfig(unittest.TestCase):
 
         self.assertEqual(person.name, 'Richard')
         self.assertEqual(person.age, 40.0)
-        self.assertEqual(person.petname, 'Sooty')        
+        self.assertEqual(person.petname, 'Sooty')
 
     def test_pickle(self):
 
@@ -63,4 +63,4 @@ class TestConfig(unittest.TestCase):
 
         self.assertEqual(person2.name, 'Richard')
         self.assertEqual(person2.age, 40.0)
-        self.assertEqual(person2.petname, 'Sooty')   
+        self.assertEqual(person2.petname, 'Sooty')

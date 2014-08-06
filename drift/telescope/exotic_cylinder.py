@@ -41,7 +41,7 @@ class GradientCylinder(cylinder.UnpolarisedCylinderTelescope):
 
         # Parameters for gradient feedspacing
         a = self.wavelengths[-1] / 2.0 if self.min_spacing < 0.0 else self.min_spacing
-        #b = 2 * (sp - a) / nf
+        # b = 2 * (sp - a) / nf
         b = 2.0*(self.max_spacing - a * (nf-1)) / (nf-1)**2.0
 
         pos = np.empty([nf, 2], dtype=np.float64)

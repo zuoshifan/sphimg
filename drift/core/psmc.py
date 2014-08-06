@@ -126,7 +126,6 @@ class PSMonteCarloAlt(psestimation.PSEstimation):
 
         bt = self.kltrans.beamtransfer
         evals, evecs = self.kltrans.modes_m(mi)
-        # nbands = self.nbands - 1
 
         # Set of S/N weightings
         cf = (evals + 1.0)**-0.5
@@ -141,7 +140,6 @@ class PSMonteCarloAlt(psestimation.PSEstimation):
         xv2 = np.dot(evecs.T.conj(), xv1).reshape(bt.ndof(mi), self.nsamples)
 
         # Project back into sky basis
-        # xv3 = self.kltrans.beamtransfer.project_vector_svd_to_sky(mi, xv2, conj=True, temponly=True)
         xv3 = self.kltrans.beamtransfer.project_vector_svd_conj(mi, xv2, temponly=True)
 
         for bi in range(self.nbands):
@@ -149,7 +147,6 @@ class PSMonteCarloAlt(psestimation.PSEstimation):
             # Product with sky covariance C_l(z, z')
             xv4 = np.zeros_like(xv3)
             for li in range(self.telescope.lmax+1 - mi):
-                # xv4[:, 0, li, :] = np.dot(self.clarray[bi, li + mi, 0, 0], xv3[:, 0, li, :]) # TT only.
                 xv4[:, 0, li, :] = np.dot(self.clarray[bi, li + mi, :, :], xv3[:, 0, li, :]) # TT only.
 
             # Projection from sky back into SVD basis
@@ -162,7 +159,6 @@ class PSMonteCarloAlt(psestimation.PSEstimation):
             # Push set of vectors into cache.
             self.vec_cache.append(xv7)
 
-        # self.vec_cache.append(np.dot(xv1, xv1))
         self.vec_cache.append(xv1 * xv1)
 
 

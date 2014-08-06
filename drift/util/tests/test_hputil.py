@@ -19,5 +19,3 @@ def test_pack_unpack_full():
     pck2 = hputil.pack_alm(hputil.unpack_alm(pck1, 3, fullm=True))
 
     assert np.allclose(pck1, pck2).all()
-    
-    
