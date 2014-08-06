@@ -598,7 +598,7 @@ class PSEstimation(config.Reader):
 
                 # Uncorrelated methods
                 # square root of fisher matrix
-                sqrt_fisher = hermi_matrix_root_eigh(self.fisher)
+                sqrt_fisher = hermi_matrix_root_eigh(self.fisher.copy(), overwrite_a=True)
                 inv_sqrt_fisher = la.inv(sqrt_fisher)
                 uc_cv = np.zeros_like(self.fisher)
                 uc_mm = np.zeros_like(self.fisher)
