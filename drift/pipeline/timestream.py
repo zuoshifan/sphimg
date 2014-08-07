@@ -676,6 +676,7 @@ class Timestream(object):
         ps.delbands()
 
         qtotal = np.array(qvals).sum(axis=0)
+        qtotal = qtotal.real
 
         fisher, bias = ps.fisher_bias()
 
@@ -703,10 +704,10 @@ class Timestream(object):
 
             with h5py.File(self._psfile, 'a') as f:
 
-                f.create_dataset('uw_powerspectrum', data=uw_powerspectrum.real)
-                f.create_dataset('uc_powerspectrum', data=uc_powerspectrum.real)
-                f.create_dataset('mv_powerspectrum', data=mv_powerspectrum.real)
-                f.create_dataset('iv_powerspectrum', data=iv_powerspectrum.real)
+                f.create_dataset('uw_powerspectrum', data=uw_powerspectrum)
+                f.create_dataset('uc_powerspectrum', data=uc_powerspectrum)
+                f.create_dataset('mv_powerspectrum', data=mv_powerspectrum)
+                f.create_dataset('iv_powerspectrum', data=iv_powerspectrum)
 
         mpiutil.barrier()
 
@@ -786,7 +787,6 @@ def cross_powerspectrum(timestreams, psname, psfile):
 
     def _q_estimate(mi):
 
-        # qp = np.zeros((nstream, nstream, ps.nbands), dtype=np.float64)
         qp = np.zeros((nstream, nstream, ps.nbands), dtype=np.complex128)
 
         for ti in range(nstream):
@@ -798,7 +798,6 @@ def cross_powerspectrum(timestreams, psname, psfile):
                 sj = timestreams[tj]
 
                 qp[ti, tj] = ps.q_estimator(mi, si.mmode_kl(mi), sj.mmode_kl(mi))
-                # qp[tj, ti] = qp[ti, tj]
                 qp[tj, ti] = np.conj(qp[ti, tj])
 
         return qp
@@ -811,6 +810,7 @@ def cross_powerspectrum(timestreams, psname, psfile):
     ps.delbands()
 
     qtotal = np.array(qvals).sum(axis=0)
+    qtotal = qtotal.real
 
     fisher, bias = ps.fisher_bias()
 
@@ -845,10 +845,10 @@ def cross_powerspectrum(timestreams, psname, psfile):
         shutil.copyfile(ps._psfile, psfile)
 
         with h5py.File(psfile, 'a') as f:
-            f.create_dataset('uw_powerspectrum', data=uw_powerspectrum.real)
-            f.create_dataset('uc_powerspectrum', data=uc_powerspectrum.real)
-            f.create_dataset('mv_powerspectrum', data=mv_powerspectrum.real)
-            f.create_dataset('iv_powerspectrum', data=iv_powerspectrum.real)
+            f.create_dataset('uw_powerspectrum', data=uw_powerspectrum)
+            f.create_dataset('uc_powerspectrum', data=uc_powerspectrum)
+            f.create_dataset('mv_powerspectrum', data=mv_powerspectrum)
+            f.create_dataset('iv_powerspectrum', data=iv_powerspectrum)
 
     mpiutil.barrier()
 

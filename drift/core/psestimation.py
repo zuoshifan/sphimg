@@ -564,10 +564,8 @@ class PSEstimation(config.Reader):
         fisher, bias = zip(*fisher_bias)
 
         # Sum over all m-modes to get the over all Fisher and bias
-        # self.fisher = np.sum(np.array(fisher), axis=0).real # Be careful of the .real here
-        self.fisher = np.sum(np.array(fisher), axis=0)
-        # self.bias = np.sum(np.array(bias), axis=0).real # Be careful of the .real here
-        self.bias = np.sum(np.array(bias), axis=0)
+        self.fisher = np.sum(np.array(fisher), axis=0).real # Be careful of the .real here
+        self.bias = np.sum(np.array(bias), axis=0).real # Be careful of the .real here
 
         # Write out all the PS estimation products
         if mpiutil.rank0:
@@ -661,28 +659,28 @@ class PSEstimation(config.Reader):
 
                 # Unwindowed
                 f.create_dataset('uw_covariance/', data=uw_cv)
-                f.create_dataset('uw_errors/', data=uw_err.real)
+                f.create_dataset('uw_errors/', data=uw_err)
                 f.create_dataset('uw_correlation/', data=uw_cr)
                 f.create_dataset('uw_mmatrix/', data=uw_mm)
                 f.create_dataset('uw_wfunction/', data=uw_wf)
 
                 # Uncorrelated
                 f.create_dataset('uc_covariance/', data=uc_cv)
-                f.create_dataset('uc_errors/', data=uc_err.real)
+                f.create_dataset('uc_errors/', data=uc_err)
                 f.create_dataset('uc_correlation/', data=uc_cr)
                 f.create_dataset('uc_mmatrix/', data=uc_mm)
                 f.create_dataset('uc_wfunction/', data=uc_wf)
 
                 # Minimum variance
                 f.create_dataset('mv_covariance/', data=mv_cv)
-                f.create_dataset('mv_errors/', data=mv_err.real)
+                f.create_dataset('mv_errors/', data=mv_err)
                 f.create_dataset('mv_correlation/', data=mv_cr)
                 f.create_dataset('mv_mmatrix/', data=mv_mm)
                 f.create_dataset('mv_wfunction/', data=mv_wf)
 
                 # Inverse variance
                 f.create_dataset('iv_covariance/', data=iv_cv)
-                f.create_dataset('iv_errors/', data=iv_err.real)
+                f.create_dataset('iv_errors/', data=iv_err)
                 f.create_dataset('iv_correlation/', data=iv_cr)
                 f.create_dataset('iv_mmatrix/', data=iv_mm)
                 f.create_dataset('iv_wfunction/', data=iv_wf)
@@ -797,8 +795,7 @@ class PSEstimation(config.Reader):
             # qa[-1] = np.sum((x0 * y0.conj()).T.real * noisemodes, axis=-1)
             qa[-1] = np.sum((x0 * y0.conj()).T * noisemodes, axis=-1)
 
-        # return qa.real
-        return qa
+        return qa # .real
 
     #===================================================
 
