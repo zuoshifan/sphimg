@@ -264,6 +264,8 @@ class PSEstimation(config.Reader):
     fisher = None
     bias = None
 
+    _nonneg_fisher = True # Negative Fisher matrix elements set to zero if True
+
 
     @property
     def _psdir(self):
@@ -567,6 +569,10 @@ class PSEstimation(config.Reader):
         self.fisher = np.sum(np.array(fisher), axis=0).real # Be careful of the .real here
         self.bias = np.sum(np.array(bias), axis=0).real # Be careful of the .real here
 
+        if self._nonneg_fisher:
+            # set negative elements (due to numerical errors) to zeros
+            self.fisher = np.where(self.fisher < 0.0, 0.0, self.fisher)
+
         # Write out all the PS estimation products
         if mpiutil.rank0:
             et = time.time()
@@ -586,6 +592,8 @@ class PSEstimation(config.Reader):
                 # Uncorrelated methods
                 # square root of fisher matrix
                 sqrt_fisher = hermi_matrix_root_eigh(self.fisher.copy(), overwrite_a=True)
+                if self._nonneg_fisher:
+                    sqrt_fisher = np.where(sqrt_fisher < 0.0, 0.0, sqrt_fisher)
                 inv_sqrt_fisher = la.inv(sqrt_fisher)
                 uc_cv = np.zeros_like(self.fisher)
                 uc_mm = np.zeros_like(self.fisher)
