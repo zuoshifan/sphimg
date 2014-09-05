@@ -264,7 +264,8 @@ class PSEstimation(config.Reader):
     fisher = None
     bias = None
 
-    _nonneg_fisher = True # Negative Fisher matrix elements set to zero if True
+    # _nonneg_fisher = True # Negative Fisher matrix elements set to zero if True
+    _nonneg_fisher = False
 
 
     @property
