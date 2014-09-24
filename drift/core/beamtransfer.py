@@ -1228,7 +1228,8 @@ class BeamTransfer(object):
 
                     for fj in self._svd_freq_iter(mi):
                         fjbeam = beam[fj, :svnum[fj], pj, :] # Beam for this pol, freq, and svcut (j)
-                        lmat = mat[pi, pj, mi:, fi, fj] # Local section of the sky matrix (i.e C_l part)
+                        # lmat = mat[pi, pj, mi:, fi, fj] # Local section of the sky matrix (i.e C_l part)
+                        lmat = mat[pi, pj, :, fi, fj] # Local section of the sky matrix (i.e C_l part)
 
                         matf[svbounds[fi]:svbounds[fi+1], svbounds[fj]:svbounds[fj+1]] += np.dot(fibeam * lmat, fjbeam.T.conj())
 

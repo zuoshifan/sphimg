@@ -169,8 +169,20 @@ class KLTransform(config.Reader):
 
     klname = None
 
-    _cvfg = None
-    _cvsg = None
+    # _cvfg = None
+    # _cvsg = None
+
+    @property
+    def _cvdir(self):
+        return self.beamtransfer.directory + '/covariance/'
+
+    @property
+    def _cvfg(self):
+        return self._cvdir + 'fg_covariance.hdf5'
+
+    @property
+    def _cvsg(self):
+        return self._cvdir + 'sg_covariance.hdf5'
 
     @property
     def _evdir(self):
@@ -201,25 +213,21 @@ class KLTransform(config.Reader):
         cv_fg : np.ndarray[pol2, pol1, l, freq1, freq2]
         """
 
-        if self._cvfg is None:
+        npol = self.telescope.num_pol_sky
 
-            npol = self.telescope.num_pol_sky
+        if npol != 1 and npol != 3 and npol != 4:
+            raise Exception("Can only handle unpolarised only (num_pol_sky \
+                             = 1), or I, Q and U (num_pol_sky = 3).")
 
-            if npol != 1 and npol != 3 and npol != 4:
-                raise Exception("Can only handle unpolarised only (num_pol_sky \
-                                 = 1), or I, Q and U (num_pol_sky = 3).")
-
-            # If not polarised then zero out the polarised components of the array
-            if self.use_polarised:
-                self._cvfg = skymodel.foreground_model(self.telescope.lmax,
-                                                       self.telescope.frequencies,
-                                                       npol, pol_length=self.pol_length)
-            else:
-                self._cvfg = skymodel.foreground_model(self.telescope.lmax,
-                                                       self.telescope.frequencies,
-                                                       npol, pol_frac=0.0)
-
-        return self._cvfg
+        # If not polarised then zero out the polarised components of the array
+        if self.use_polarised:
+            return skymodel.foreground_model(self.telescope.lmax,
+                                             self.telescope.frequencies,
+                                             npol, pol_length=self.pol_length)
+        else:
+            return skymodel.foreground_model(self.telescope.lmax,
+                                             self.telescope.frequencies,
+                                             npol, pol_frac=0.0)
 
 
     def signal(self):
@@ -230,17 +238,42 @@ class KLTransform(config.Reader):
         cv_fg : np.ndarray[pol2, pol1, l, freq1, freq2]
         """
 
-        if self._cvsg is None:
-            npol = self.telescope.num_pol_sky
+        npol = self.telescope.num_pol_sky
 
-            if npol != 1 and npol != 3 and npol != 4:
-                raise Exception("Can only handle unpolarised only (num_pol_sky \
-                                = 1), or I, Q and U (num_pol_sky = 3).")
+        if npol != 1 and npol != 3 and npol != 4:
+            raise Exception("Can only handle unpolarised only (num_pol_sky \
+                            = 1), or I, Q and U (num_pol_sky = 3).")
 
-            self._cvsg = skymodel.im21cm_model(self.telescope.lmax,
-                                               self.telescope.frequencies, npol)
+        return skymodel.im21cm_model(self.telescope.lmax,
+                                           self.telescope.frequencies, npol)
 
-        return self._cvsg
+
+    def _generate_cvfg(self, regen=False):
+        if os.path.exists(self._cvfg) and not regen:
+            print 'File %s exists. Skipping...' % self._cvfg
+            return
+
+        with h5py.File(self._cvfg, 'w') as f:
+            f.create_dataset('cv', data=self.foreground())
+
+
+    def _generate_cvsg(self, regen=False):
+        if os.path.exists(self._cvsg) and not regen:
+            print 'File %s exists. Skipping...' % self._cvsg
+            return
+
+        with h5py.File(self._cvsg, 'w') as f:
+            f.create_dataset('cv', data=self.signal())
+
+
+    def cvfg_m(self, mi):
+        with h5py.File(self._cvfg, 'r') as f:
+            return f['cv'][:, :, mi:, :, :] # only l >= m
+
+
+    def cvsg_m(self, mi):
+        with h5py.File(self._cvsg, 'r') as f:
+            return f['cv'][:, :, mi:, :, :] # only l >= m
 
 
     def sn_covariance(self, mi):
@@ -264,10 +297,10 @@ class KLTransform(config.Reader):
             raise Exception("Either `use_thermal` or `use_foregrounds`, or both must be True.")
 
         # Project the signal and foregrounds from the sky onto the telescope.
-        cvb_s = self.beamtransfer.project_matrix_sky_to_svd(mi, self.signal())
+        cvb_s = self.beamtransfer.project_matrix_sky_to_svd(mi, self.cvsg_m(mi))
 
         if self.use_foregrounds:
-            cvb_n = self.beamtransfer.project_matrix_sky_to_svd(mi, self.foreground())
+            cvb_n = self.beamtransfer.project_matrix_sky_to_svd(mi, self.cvfg_m(mi))
         else:
             cvb_n = np.zeros_like(cvb_s)
 
@@ -417,6 +450,33 @@ class KLTransform(config.Reader):
             st = time.time()
             print
             print '=' * 80
+            print "======== Starting covariance matrices calculation ========"
+
+        # mpiutil.barrier()
+
+        # make covariance matrices directory
+        try:
+            if not os.path.exists(self._cvdir):
+                os.makedirs(self._cvdir)
+        except OSError:
+            pass
+
+        # generate covariance matrices
+        if mpiutil.rank0:
+            self._generate_cvfg(regen)
+            self._generate_cvsg(regen)
+
+            et = time.time()
+            print "======== Ending covariance matrices calculation (time=%f) ========" % (et - st)
+
+        mpiutil.barrier()
+
+##------------------------------------------------------------------
+
+        if mpiutil.rank0:
+            st = time.time()
+            print
+            print '=' * 80
             print "======== Starting %s calculation ========" % self.klname
 
         mpiutil.barrier()
@@ -436,12 +496,15 @@ class KLTransform(config.Reader):
 
             self._transform_save_m(mi)
 
+        # If we're part of an MPI run, synchronise here.
+        mpiutil.barrier()
+
         if mpiutil.rank0:
             # Make file marker that the m's have been correctly generated:
             open(completed_file, 'a').close()
 
         # If we're part of an MPI run, synchronise here.
-        mpiutil.barrier()
+        # mpiutil.barrier()
 
         if mpiutil.rank0:
             et = time.time()
