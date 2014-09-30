@@ -602,7 +602,7 @@ class BeamTransfer(object):
             if mpiutil.rank0:
                 print "***** SVD projection time: %f" % (et - st)
             # Collect the spectrum into a single file.
-            self._collect_svd_spectrum(regen)
+            # self._collect_svd_spectrum(regen)
 
         # Save pickled telescope object
         if mpiutil.rank0:
@@ -1211,7 +1211,7 @@ class BeamTransfer(object):
         npol = 1 if temponly else self.telescope.num_pol_sky
 
         # Get the SVD beam matrix
-        beam = self.beam_svd(mi)
+        # beam = self.beam_svd(mi) # does not load full beam to save memory
 
         # Number of significant sv modes at each frequency, and the array bounds
         svnum, svbounds = self._svd_num(mi)
@@ -1224,10 +1224,10 @@ class BeamTransfer(object):
             for pj in range(npol):
                 for fi in self._svd_freq_iter(mi):
 
-                    fibeam = beam[fi, :svnum[fi], pi, :] # Beam for this pol, freq, and svcut (i)
+                    fibeam = self.beam_svd(mi, fi)[:svnum[fi], pi, :] # Beam for this pol, freq, and svcut (i)
 
                     for fj in self._svd_freq_iter(mi):
-                        fjbeam = beam[fj, :svnum[fj], pj, :] # Beam for this pol, freq, and svcut (j)
+                        fjbeam = self.beam_svd(mi, fj)[:svnum[fj], pj, :] # Beam for this pol, freq, and svcut (j)
                         # lmat = mat[pi, pj, mi:, fi, fj] # Local section of the sky matrix (i.e C_l part)
                         lmat = mat[pi, pj, :, fi, fj] # Local section of the sky matrix (i.e C_l part)
 
