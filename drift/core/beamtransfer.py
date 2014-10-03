@@ -1211,7 +1211,7 @@ class BeamTransfer(object):
         npol = 1 if temponly else self.telescope.num_pol_sky
 
         # Get the SVD beam matrix
-        # beam = self.beam_svd(mi) # does not load full beam to save memory
+        beam = self.beam_svd(mi)
 
         # Number of significant sv modes at each frequency, and the array bounds
         svnum, svbounds = self._svd_num(mi)
@@ -1224,10 +1224,10 @@ class BeamTransfer(object):
             for pj in range(npol):
                 for fi in self._svd_freq_iter(mi):
 
-                    fibeam = self.beam_svd(mi, fi)[:svnum[fi], pi, :] # Beam for this pol, freq, and svcut (i)
+                    fibeam = beam[fi, :svnum[fi], pi, :] # Beam for this pol, freq, and svcut (i)
 
                     for fj in self._svd_freq_iter(mi):
-                        fjbeam = self.beam_svd(mi, fj)[:svnum[fj], pj, :] # Beam for this pol, freq, and svcut (j)
+                        fjbeam = beam[fj, :svnum[fj], pj, :] # Beam for this pol, freq, and svcut (j)
                         # lmat = mat[pi, pj, mi:, fi, fj] # Local section of the sky matrix (i.e C_l part)
                         lmat = mat[pi, pj, :, fi, fj] # Local section of the sky matrix (i.e C_l part)
 
