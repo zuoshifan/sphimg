@@ -327,6 +327,50 @@ class Timestream(object):
     #====================================================
 
 
+    def parallel_map(self, func, nmodes):
+        """Apply a parallel map using MPI.
+
+        All ranks return the full set of results.
+
+        Parameters
+        ----------
+        func : function
+            Function to apply.
+
+        nmodes : scalar
+            The number of m-modes.
+
+        Returns
+        -------
+        alm : np.array
+            Global array of alm.
+        """
+
+        # Synchronize
+        # barrier()
+
+        # If we're only on a single node, then just perform without MPI
+        # if size == 1 and rank == 0:
+        #     return [func(item) for item in glist]
+
+        n_mis, s_mis, e_mis = mpiutil.split_all(nmodes)
+        n, s, e = mpiutil.split_local(nmodes)
+
+        alm = np.zeros((self.telescope.lmax + 1, self.telescope.nfreq, self.telescope.num_pol_sky,
+                        self.telescope.lmax + 1), dtype=np.complex128)
+
+        for mi in range(s, e):
+            alm[mi] = func(mi)
+
+        misize = self.telescope.nfreq * self.telescope.num_pol_sky * (self.telescope.lmax + 1)
+        sizes = n_mis * misize
+        displ = s_mis * misize
+
+        mpiutil.Allgatherv(mpiutil.IN_PLACE, [alm, sizes, displ, mpiutil.typemap(alm.dtype)])
+
+        return alm.transpose((1, 2, 3, 0))
+
+
     @property
     def _mapsdir(self):
         return self.output_directory + '/maps/'
@@ -352,16 +396,18 @@ class Timestream(object):
 
             return sphmode
 
-        alm_list = mpiutil.parallel_map(_make_alm, range(self.telescope.mmax + 1))
+        alm = self.parallel_map(_make_alm, self.telescope.mmax + 1)
+
+        # alm_list = mpiutil.parallel_map(_make_alm, range(self.telescope.mmax + 1))
 
         if mpiutil.rank0:
 
-            alm = np.zeros((self.telescope.nfreq, self.telescope.num_pol_sky, self.telescope.lmax + 1,
-                            self.telescope.lmax + 1), dtype=np.complex128)
+        #     alm = np.zeros((self.telescope.nfreq, self.telescope.num_pol_sky, self.telescope.lmax + 1,
+        #                     self.telescope.lmax + 1), dtype=np.complex128)
 
-            for mi in range(self.telescope.mmax + 1):
+        #     for mi in range(self.telescope.mmax + 1):
 
-                alm[..., mi] = alm_list[mi]
+        #         alm[..., mi] = alm_list[mi]
 
             # Smooth alm with a Gaussian symmetric beam function.
             if fwhm > 0.0:
@@ -400,16 +446,18 @@ class Timestream(object):
 
             return sphmode
 
-        alm_list = mpiutil.parallel_map(_make_alm, range(self.telescope.mmax + 1))
+        alm = self.parallel_map(_make_alm, self.telescope.mmax + 1)
+
+        # alm_list = mpiutil.parallel_map(_make_alm, range(self.telescope.mmax + 1))
 
         if mpiutil.rank0:
 
-            alm = np.zeros((self.telescope.nfreq, self.telescope.num_pol_sky, self.telescope.lmax + 1,
-                            self.telescope.lmax + 1), dtype=np.complex128)
+            # alm = np.zeros((self.telescope.nfreq, self.telescope.num_pol_sky, self.telescope.lmax + 1,
+            #                 self.telescope.lmax + 1), dtype=np.complex128)
 
-            for mi in range(self.telescope.mmax + 1):
+            # for mi in range(self.telescope.mmax + 1):
 
-                alm[..., mi] = alm_list[mi]
+            #     alm[..., mi] = alm_list[mi]
 
             # Smooth alm with a Gaussian symmetric beam function.
             if fwhm > 0.0:
@@ -606,19 +654,23 @@ class Timestream(object):
 
             return sphmode
 
-        alm_list = mpiutil.parallel_map(_make_alm, range(self.telescope.mmax + 1))
+        alm = self.parallel_map(_make_alm, self.telescope.mmax + 1)
+
+        # alm_list = mpiutil.parallel_map(_make_alm, range(self.telescope.mmax + 1))
 
         if mpiutil.rank0:
 
-            alm = np.zeros((self.telescope.nfreq, self.telescope.num_pol_sky, self.telescope.lmax + 1,
-                            self.telescope.lmax + 1), dtype=np.complex128)
+            # alm = np.zeros((self.telescope.nfreq, self.telescope.num_pol_sky, self.telescope.lmax + 1,
+            #                 self.telescope.lmax + 1), dtype=np.complex128)
 
-            # Determine whether to use m=0 or not
-            mlist = range(1 if self.no_m_zero else 0, self.telescope.mmax + 1)
+            # # Determine whether to use m=0 or not
+            if self.no_m_zero:
+                alm[..., 0] = 0
+            # mlist = range(1 if self.no_m_zero else 0, self.telescope.mmax + 1)
 
-            for mi in mlist:
+            # for mi in mlist:
 
-                alm[..., mi] = alm_list[mi]
+            #     alm[..., mi] = alm_list[mi]
 
             skymap = hputil.sphtrans_inv_sky(alm, nside)
 
