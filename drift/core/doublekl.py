@@ -28,6 +28,7 @@ class DoubleKL(kltransform.KLTransform):
 
         # Fetch the covariance matrices to diagonalise
         nside = self.beamtransfer.ndof(mi)
+        print 'nside = ', nside
 
         # Ensure that number of SVD degrees of freedom is non-zero before proceeding
         if nside == 0:
@@ -38,7 +39,9 @@ class DoubleKL(kltransform.KLTransform):
         cs, cn = [ cv.reshape(nside, nside) for cv in self.sn_covariance(mi) ]
 
         # Find joint eigenbasis and transformation matrix
+        print 'Start first KL transfom for m = %d...' % mi
         evals, evecs2, ac = kltransform.eigh_gen(cs, cn)
+        print 'First KL transfom for m = %d done.' % mi
         evecs = evecs2.T.conj()
 
         # Get the indices that extract the high S/F ratio modes
@@ -66,7 +69,9 @@ class DoubleKL(kltransform.KLTransform):
             cn = np.dot(evecs, np.dot(cn, evecs.T.conj()))
 
             # Find the eigenbasis and the transformation into it.
+            print 'Start second KL transfom for m = %d...' % mi
             evals, evecs2, ac = kltransform.eigh_gen(cs, cn)
+            print 'Second KL transfom for m = %d done.' % mi
             evecs = np.dot(evecs2.T.conj(), evecs)
 
             # Construct the inverse if required.

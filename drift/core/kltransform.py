@@ -297,12 +297,16 @@ class KLTransform(config.Reader):
             raise Exception("Either `use_thermal` or `use_foregrounds`, or both must be True.")
 
         # Project the signal and foregrounds from the sky onto the telescope.
+        print 'Start signal covariance projection for m = %d...' % mi
         cvb_s = self.beamtransfer.project_matrix_sky_to_svd(mi, self.cvsg_m(mi))
+        print 'Signal covariance projection for m = %d done.' % mi
 
+        print 'Start foreground covariance projection for m = %d...' % mi
         if self.use_foregrounds:
             cvb_n = self.beamtransfer.project_matrix_sky_to_svd(mi, self.cvfg_m(mi))
         else:
             cvb_n = np.zeros_like(cvb_s)
+        print 'Foreground covariance projection for m = %d done.' % mi
 
         # Add in a small diagonal to regularise the noise matrix.
         cnr = cvb_n.reshape((self.beamtransfer.ndof(mi), -1))
@@ -323,6 +327,7 @@ class KLTransform(config.Reader):
         cvb_n += self.beamtransfer.project_matrix_diagonal_telescope_to_svd(mi, npower)
 
 
+        print 'Return projected covariance matrices for m = %d.' % mi
         return cvb_s, cvb_n
 
 
