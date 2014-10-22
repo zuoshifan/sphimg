@@ -12,6 +12,10 @@ from drift.util import mpiutil, util, config
 from drift.util import typeutil
 from drift.core import skymodel
 
+from scalapy import core
+import scalapy.routines as rt
+from drift.util import scalapyutil as su
+
 
 def collect_m_arrays(mlist, func, shapes, dtype):
 
@@ -172,6 +176,12 @@ class KLTransform(config.Reader):
     # _cvfg = None
     # _cvsg = None
 
+    spcomm = mpiutil.world # splited communicator
+    grid_shape = [2, 3] # process grid shape
+    # pc = core.ProcessContext([2, 3], comm=spcomm) # process context
+    # pc = None
+    min_dist = 100 # minimum matrix size to do the distributed calculation
+
     @property
     def _cvdir(self):
         return self.beamtransfer.directory + '/covariance/'
@@ -272,11 +282,12 @@ class KLTransform(config.Reader):
 
 
     def cvsg_m(self, mi):
+        assert os.path.exists(self._cvfg)
         with h5py.File(self._cvsg, 'r') as f:
             return f['cv'][:, :, mi:, :, :] # only l >= m
 
 
-    def sn_covariance(self, mi):
+    def sn_covariance(self, mi, comm):
         """Compute the signal and noise covariances (on the telescope).
 
         The signal is formed from the 21cm signal, whereas the noise includes
@@ -297,41 +308,101 @@ class KLTransform(config.Reader):
             raise Exception("Either `use_thermal` or `use_foregrounds`, or both must be True.")
 
         # Project the signal and foregrounds from the sky onto the telescope.
-        print 'Start signal covariance projection for m = %d...' % mi
-        cvb_s = self.beamtransfer.project_matrix_sky_to_svd(mi, self.cvsg_m(mi))
-        print 'Signal covariance projection for m = %d done.' % mi
 
-        print 'Start foreground covariance projection for m = %d...' % mi
-        if self.use_foregrounds:
-            cvb_n = self.beamtransfer.project_matrix_sky_to_svd(mi, self.cvfg_m(mi))
+        # print comm.Get_size()
+        # comm.Barrier()
+        # core.initmpi([2, 2], block_shape=[10, 10], comm=comm)
+
+        nside = self.beamtransfer.ndof(mi)
+        comm_size = comm.Get_size()
+        # blk_size = (nside - 1) / comm_size + 1
+
+
+        dist = False # use distribute computation if True
+        cvb_s = None
+        cvb_n = None
+
+        # comm.Barrier()
+
+        if comm.Get_rank() == 0:
+            print 'Start signal covariance projection for m = %d...' % mi
+            cvb_s = self.beamtransfer.project_matrix_sky_to_svd(mi, self.cvsg_m(mi))
+            print 'Signal covariance projection for m = %d done.' % mi
+            if nside >= self.min_dist:
+                cvb_s = np.asfortranarray(cvb_s)
+                dist = True
+            #     comm.bcast(dist, root=0)
+            # else:
+            #     comm.Bcast(cvb_s, root=0)
+            # assert np.allclose(cvb_s, cvb_s.T.conj())
+            # print 'cvb_s.shape = ', cvb_s.shape
+        selected_rank = 1 if comm_size >=2 else 0
+        if comm.Get_rank() == selected_rank:
+            print 'Process %d start foreground covariance projection for m = %d...' % (selected_rank, mi)
+            if self.use_foregrounds:
+                cvb_n = self.beamtransfer.project_matrix_sky_to_svd(mi, self.cvfg_m(mi))
+            else:
+                cvb_n = np.zeros_like(cvb_s)
+            print 'Foreground covariance projection for m = %d done.' % mi
+
+            # Add in a small diagonal to regularise the noise matrix.
+            cnr = cvb_n.reshape((self.beamtransfer.ndof(mi), -1))
+            cnr[np.diag_indices_from(cnr)] += self._foreground_regulariser * cnr.max()
+
+            # Even if noise=False, we still want a very small amount of
+            # noise, so we multiply by a constant to turn Tsys -> 1 mK.
+            nc = 1.0
+            if not self.use_thermal:
+                nc =  (1e-3 / self.telescope.tsys_flat)**2
+
+            # Construct diagonal noise power in telescope basis
+            bl = np.arange(self.telescope.npairs)
+            bl = np.concatenate((bl, bl))
+            npower = nc * self.telescope.noisepower(bl[np.newaxis, :], np.arange(self.telescope.nfreq)[:, np.newaxis]).reshape(self.telescope.nfreq, self.beamtransfer.ntel)
+
+            # Project into SVD basis and add into noise matrix
+            cvb_n += self.beamtransfer.project_matrix_diagonal_telescope_to_svd(mi, npower)
+            if nside >= self.min_dist:
+                cvb_n = np.asfortranarray(cvb_n)
+                dist = True
+            #     comm.bcast(dist, root=selected_rank)
+            # else:
+            #     comm.Bcast(cvb_n, root=selected_rank)
+            # cvb_n = np.asfortranarray(cvb_n)
+            # assert np.allclose(cvb_n, cvb_n.T.conj())
+            # print 'cvb_n.shape = ', cvb_n.shape
+
+        comm.Barrier()
+
+        dist = comm.bcast(dist, root=0)
+        # print 'Process %d dist = ' % comm.Get_rank(), dist
+
+        if dist == True:
+            # get block size according to nside
+            blk_size = (nside - 1) / comm_size + 1
+            pc = core.ProcessContext(self.grid_shape, comm=comm) # process context
+            dcvb_s = core.DistributedMatrix.from_global_array(cvb_s, rank=0, block_shape=[blk_size, blk_size], context=pc)
+            dcvb_n = core.DistributedMatrix.from_global_array(cvb_n, rank=selected_rank, block_shape=[blk_size, blk_size], context=pc)
+            return dcvb_s, dcvb_n, True
         else:
-            cvb_n = np.zeros_like(cvb_s)
-        print 'Foreground covariance projection for m = %d done.' % mi
+            # nside = self.beamtransfer.ndof(mi)
+            if cvb_s is None:
+                cvb_s = np.empty((nside, nside), dtype=np.complex128)
+            if cvb_n is None:
+                cvb_n = np.empty((nside, nside), dtype=np.complex128)
+            # comm.Bcast([cvb_s, mpiutil.typemap(cvb_s.dtype)], [cvb_s, mpiutil.typemap(cvb_s.dtype)], root=0) # more effective to use Bcast
+            # comm.Bcast([cvb_n, mpiutil.typemap(cvb_n.dtype)], [cvb_n, mpiutil.typemap(cvb_n.dtype)], root=selected_rank)
+            comm.Bcast(cvb_s, root=0) # more effective to use Bcast
+            comm.Bcast(cvb_n, root=selected_rank)
+            return cvb_s, cvb_n, False
 
-        # Add in a small diagonal to regularise the noise matrix.
-        cnr = cvb_n.reshape((self.beamtransfer.ndof(mi), -1))
-        cnr[np.diag_indices_from(cnr)] += self._foreground_regulariser * cnr.max()
-
-        # Even if noise=False, we still want a very small amount of
-        # noise, so we multiply by a constant to turn Tsys -> 1 mK.
-        nc = 1.0
-        if not self.use_thermal:
-            nc =  (1e-3 / self.telescope.tsys_flat)**2
-
-        # Construct diagonal noise power in telescope basis
-        bl = np.arange(self.telescope.npairs)
-        bl = np.concatenate((bl, bl))
-        npower = nc * self.telescope.noisepower(bl[np.newaxis, :], np.arange(self.telescope.nfreq)[:, np.newaxis]).reshape(self.telescope.nfreq, self.beamtransfer.ntel)
-
-        # Project into SVD basis and add into noise matrix
-        cvb_n += self.beamtransfer.project_matrix_diagonal_telescope_to_svd(mi, npower)
+        # if comm.Get_rank() == 0:
+        #     print 'Return projected distribute covariance matrices for m = %d.' % mi
+        # # return cvb_s, cvb_n
+        # return dcvb_s, dcvb_n
 
 
-        print 'Return projected covariance matrices for m = %d.' % mi
-        return cvb_s, cvb_n
-
-
-    def _transform_m(self, mi):
+    def _transform_m(self, mi, comm):
         """Perform the KL-transform for a single m.
 
         Parameters
@@ -346,7 +417,8 @@ class KLTransform(config.Reader):
             covariances in the new basis, and the evecs define the basis.
         """
 
-        print "Solving for Eigenvalues...."
+        if comm.Get_rank() == 0:
+             print "Solving for Eigenvalues...."
 
         # Fetch the covariance matrices to diagonalise
         st = time.time()
@@ -356,17 +428,33 @@ class KLTransform(config.Reader):
         if nside == 0:
             return np.array([]), np.array([[]]), np.array([[]]), { 'ac' : 0.0 }
 
-        cvb_sr, cvb_nr = [cv.reshape(nside, nside) for cv in self.sn_covariance(mi)]
+        # cvb_sr, cvb_nr = [cv.reshape(nside, nside) for cv in self.sn_covariance(mi)]
+        cvb_sr, cvb_nr, dist = self.sn_covariance(mi, comm)
         et = time.time()
-        print "Time =", (et-st)
+        if comm.Get_rank() == 0:
+            print "Time =", (et-st)
 
         # Perform the generalised eigenvalue problem to get the KL-modes.
         st = time.time()
-        evals, evecs, ac = eigh_gen(cvb_sr, cvb_nr)
+        if dist:
+            evals, evecs = su.eigh_gen(cvb_sr, cvb_nr)
+            evecs = evecs.to_global_array() # no need Hermitian transpose
+            # evals, evecs = rt.eigh(cvb_sr, cvb_nr)
+            # evecs = evecs.to_global_array()
+            # evecs = evecs.T.conj()
+            ac = 0.0
+        else:
+            # print 'Process %d: ' % comm.Get_rank(), cvb_sr, cvb_nr
+            evals, evecs, ac = eigh_gen(cvb_sr, cvb_nr)
+            evecs = evecs.T.conj() # need Hermitian transpose
         et=time.time()
-        print "Time =", (et-st)
+        if comm.Get_rank() == 0:
+            print "Time =", (et-st)
 
-        evecs = evecs.T.conj()
+        # evecs = evecs.to_global_array(rank=mpiutil.rank)
+        # evecs = evecs.T.conj()
+        # evecs = evecs.to_global_array() # ??????
+        # evecs = evecs.T.conj()
 
         # Generate inverse if required
         inv = None
@@ -380,7 +468,7 @@ class KLTransform(config.Reader):
 
 
 
-    def _transform_save_m(self, mi):
+    def _transform_save_m(self, mi, comm):
         """Save the KL-modes for a given m.
 
         Perform the transform and cache the results for later use.
@@ -397,47 +485,49 @@ class KLTransform(config.Reader):
         """
 
         # Perform the KL-transform
-        print "Constructing signal and noise covariances for m = %d ..." % mi
-        evals, evecs, inv, evextra = self._transform_m(mi)
+        if comm.Get_rank() == 0:
+            print "Constructing signal and noise covariances for m = %d ..." % mi
+        evals, evecs, inv, evextra = self._transform_m(mi, comm)
 
         ## Write out Eigenvals and Vectors
 
         # Create file and set some metadata
-        print "Creating file %s ...." % (self._evfile(mi))
-        with h5py.File(self._evfile(mi), 'w') as f:
-            f.attrs['m'] = mi
-            f.attrs['SUBSET'] = self.subset
+        if comm.Get_rank() == 0:
+            print "Creating file %s ...." % (self._evfile(mi))
+            with h5py.File(self._evfile(mi), 'w') as f:
+                f.attrs['m'] = mi
+                f.attrs['SUBSET'] = self.subset
 
-            ## If modes have been already truncated (e.g. DoubleKL) then pad out
-            ## with zeros at the lower end.
-            nside = self.beamtransfer.ndof(mi)
-            evalsf = np.zeros(nside, dtype=np.float64)
-            if evals.size != 0:
-                evalsf[(-evals.size):] = evals
-            f.create_dataset('evals_full', data=evalsf, compression='lzf')
+                ## If modes have been already truncated (e.g. DoubleKL) then pad out
+                ## with zeros at the lower end.
+                nside = self.beamtransfer.ndof(mi)
+                evalsf = np.zeros(nside, dtype=np.float64)
+                if evals.size != 0:
+                    evalsf[(-evals.size):] = evals
+                f.create_dataset('evals_full', data=evalsf, compression='lzf')
 
-            # Discard eigenmodes with S/N below threshold if requested.
-            if self.subset:
-                i_ev = np.searchsorted(evals, self.threshold)
-
-                evals = evals[i_ev:]
-                evecs = evecs[i_ev:]
-                print "Modes with S/N > %f: %i of %i" % (self.threshold, evals.size, evalsf.size)
-
-            # Write out potentially reduced eigen spectrum.
-            f.create_dataset('evals', data=evals, compression='lzf')
-            f.create_dataset('evecs', data=evecs, compression='lzf')
-            f.attrs['num_modes'] = evals.size
-
-            if self.inverse:
+                # Discard eigenmodes with S/N below threshold if requested.
                 if self.subset:
-                    inv = inv[i_ev:]
+                    i_ev = np.searchsorted(evals, self.threshold)
 
-                f.create_dataset('evinv', data=inv, compression='lzf')
+                    evals = evals[i_ev:]
+                    evecs = evecs[i_ev:]
+                    print "Modes with S/N > %f: %i of %i" % (self.threshold, evals.size, evalsf.size)
 
-            # Call hook which allows derived classes to save special information
-            # into the EV file.
-            self._ev_save_hook(f, evextra)
+                # Write out potentially reduced eigen spectrum.
+                f.create_dataset('evals', data=evals, compression='lzf')
+                f.create_dataset('evecs', data=evecs, compression='lzf')
+                f.attrs['num_modes'] = evals.size
+
+                if self.inverse:
+                    if self.subset:
+                        inv = inv[i_ev:]
+
+                    f.create_dataset('evinv', data=inv, compression='lzf')
+
+                # Call hook which allows derived classes to save special information
+                # into the EV file.
+                self._ev_save_hook(f, evextra)
 
 
     def _transform_save(self, regen=False):
@@ -467,14 +557,29 @@ class KLTransform(config.Reader):
             pass
 
         # generate covariance matrices
-        if mpiutil.rank0:
-            self._generate_cvfg(regen)
-            self._generate_cvsg(regen)
+        # if mpiutil.size >= 2:
+        #     if mpiutil.rank0:
+        #         self._generate_cvfg(regen)
+        #     elif mpiutil.rank == 1:
+        #         self._generate_cvsg(regen)
+        # else:
+        #     self._generate_cvfg(regen)
+        #     self._generate_cvsg(regen)
 
+        # generate covariance matrices
+        if mpiutil.rank0:
+            self._generate_cvsg(regen)
+        selected_rank = 1 if mpiutil.size >= 2 else 0
+        if mpiutil.rank == selected_rank:
+            self._generate_cvfg(regen)
+
+        mpiutil.barrier()
+
+        if mpiutil.rank0:
             et = time.time()
             print "======== Ending covariance matrices calculation (time=%f) ========" % (et - st)
 
-        mpiutil.barrier()
+        # mpiutil.barrier()
 
 ##------------------------------------------------------------------
 
@@ -487,7 +592,27 @@ class KLTransform(config.Reader):
         mpiutil.barrier()
 
         # Iterate list over MPI processes.
-        for mi in mpiutil.mpirange(self.telescope.mmax+1):
+        # grpsize = 4 # group size
+        # numgrp = (mpiutil.size - 1) / grpsize + 1 # number of groups
+        # # color = mpiutil.rank % grpsize
+        # color = mpiutil.rank / grpsize
+        # print 'color = %d' % color
+        # # split to `numgrp` independent communicators
+        # # spcomm = mpiutil.world.Split(color=color, key=mpiutil.rank)
+        # spcomm = mpiutil.world.Split(color=0, key=mpiutil.rank)
+        # print 'spcomm = ', spcomm
+        # print 'world =', mpiutil.world
+        # print 'world.Dup =', mpiutil.world.Dup()
+        # # core.initmpi([2, 2], block_shape=[10, 10])
+        # core.initmpi([2, 2], block_shape=[10, 10], comm=spcomm)
+        # # core.initmpi([2, 2], block_shape=[10, 10], comm=mpiutil.world.Dup())
+        # # core.initmpi([2, 2], block_shape=[10, 10], comm=mpiutil.world)
+
+        # core.initmpi([2, 3], block_shape=[2, 2])
+
+        # for mi in mpiutil.mpirange(self.telescope.mmax+1):
+        for mi in range(self.telescope.mmax+1):
+        # for mi in mpiutil.partition_list_alternate(range(self.telescope.mmax+1), color, numgrp):
             # Make directory for kl transform
             try:
                 if not os.path.exists(self._evdir):
@@ -496,15 +621,20 @@ class KLTransform(config.Reader):
                 pass
 
             if os.path.exists(self._evfile(mi)) and not regen:
-                print "File %s exists. Skipping..." % self._evfile(mi)
+                if mpiutil.rank0:
+                # if spcomm.Get_rank() == 0:
+                    print "File %s exists. Skipping..." % self._evfile(mi)
                 continue
 
-            self._transform_save_m(mi)
+            # self._transform_save_m(mi, spcomm)
+            self._transform_save_m(mi, self.spcomm)
 
         # If we're part of an MPI run, synchronise here.
-        mpiutil.barrier()
+        mpiutil.barrier() # global synchronization
+        # spcomm.Barrier() # synchronize within individual communicators
 
         if mpiutil.rank0:
+        # if spcomm.Get_rank() == 0:
             # Make file marker that the m's have been correctly generated:
             open(completed_file, 'a').close()
 
@@ -512,10 +642,11 @@ class KLTransform(config.Reader):
         # mpiutil.barrier()
 
         if mpiutil.rank0:
+        # if spcomm.Get_rank() == 0:
             et = time.time()
             print "======== Ending %s calculation (time=%f) ========" % (self.klname, (et - st))
 
-        mpiutil.barrier()
+        mpiutil.barrier() # global synchronization
 
 
     def _ev_save_hook(self, f, evextra):

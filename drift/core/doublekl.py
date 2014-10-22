@@ -7,6 +7,10 @@ from drift.core import kltransform
 from drift.util import mpiutil, config
 from drift.util import typeutil
 
+from scalapy import core
+import scalapy.routines as rt
+from drift.util import scalapyutil as su
+
 
 class DoubleKL(kltransform.KLTransform):
     """Modified KL technique that performs a first transformation to remove
@@ -22,13 +26,16 @@ class DoubleKL(kltransform.KLTransform):
 
     foreground_threshold = config.Property(proptype=typeutil.nonnegative_float, default=100.0)
 
-    def _transform_m(self, mi):
+    def _transform_m(self, mi, comm):
 
-        print "Solving for Eigenvalues...."
+        rank0 = True if comm.Get_rank == 0 else False
+        if rank0:
+            print "Solving for Eigenvalues...."
 
         # Fetch the covariance matrices to diagonalise
         nside = self.beamtransfer.ndof(mi)
-        print 'nside = ', nside
+        if rank0:
+            print 'nside = ', nside
 
         # Ensure that number of SVD degrees of freedom is non-zero before proceeding
         if nside == 0:
@@ -36,13 +43,24 @@ class DoubleKL(kltransform.KLTransform):
 
         # Construct S and F matrices and regularise foregrounds
         self.use_thermal = False
-        cs, cn = [ cv.reshape(nside, nside) for cv in self.sn_covariance(mi) ]
+        # cs, cn = [ cv.reshape(nside, nside) for cv in self.sn_covariance(mi) ]
+        cs, cn, dist = self.sn_covariance(mi, comm)
 
         # Find joint eigenbasis and transformation matrix
-        print 'Start first KL transfom for m = %d...' % mi
-        evals, evecs2, ac = kltransform.eigh_gen(cs, cn)
-        print 'First KL transfom for m = %d done.' % mi
-        evecs = evecs2.T.conj()
+        if rank0:
+            print 'Start first KL transfom for m = %d...' % mi
+        if dist:
+            evals, evecs = su.eigh_gen(cs, cn)
+            evecs = evecs.to_global_array() # no need Hermitian transpose
+            # evals, evecs = rt.eigh(cs, cn)
+            # evecs = evecs.to_global_array()
+            # evecs = evecs.T.conj()
+            ac = 0.0
+        else:
+            evals, evecs, ac = kltransform.eigh_gen(cs, cn)
+            evecs = evecs.T.conj() # need Hermitian transpose
+        if rank0:
+            print 'First KL transfom for m = %d done.' % mi
 
         # Get the indices that extract the high S/F ratio modes
         ind = np.where(evals > self.foreground_threshold)
@@ -59,20 +77,49 @@ class DoubleKL(kltransform.KLTransform):
         evals = evals[ind]
         evecs = evecs[ind]
         inv = inv[ind] if self.inverse else None
-        print "Modes with S/F > %f: %i of %i" % (self.foreground_threshold, evals.size, nside)
+        if rank0:
+            print "Modes with S/F > %f: %i of %i" % (self.foreground_threshold, evals.size, nside)
 
         if evals.size > 0:
             # Generate the full S and N covariances in the truncated basis
             self.use_thermal = True
-            cs, cn = [ cv.reshape(nside, nside) for cv in self.sn_covariance(mi) ]
-            cs = np.dot(evecs, np.dot(cs, evecs.T.conj()))
-            cn = np.dot(evecs, np.dot(cn, evecs.T.conj()))
+            # cs, cn = [ cv.reshape(nside, nside) for cv in self.sn_covariance(mi) ]
+            cs, cn, dist = self.sn_covariance(mi, comm)
+            if rank0:
+                print 'Start second KL transfom for m = %d...' % mi
+            if dist:
+                # ensure no precess will have empty section of evecs
+                if evecs.shape[0] >= cs.block_shape[0] * comm.Get_size():
+                    # distribute calculation
+                    evecs = np.asfortranarray(evecs)
+                    evecs = core.DistributedMatrix.from_global_array(evecs, rank=0, block_shape=cs.block_shape, context=cs.context)
+                    cs = rt.dot(evecs, rt.dot(cs, evecs, transA='N', transB='C'), transA='N', transB='N')
+                    cn = rt.dot(evecs, rt.dot(cn, evecs, transA='N', transB='C'), transA='N', transB='N')
 
-            # Find the eigenbasis and the transformation into it.
-            print 'Start second KL transfom for m = %d...' % mi
-            evals, evecs2, ac = kltransform.eigh_gen(cs, cn)
-            print 'Second KL transfom for m = %d done.' % mi
-            evecs = np.dot(evecs2.T.conj(), evecs)
+                    # Find the eigenbasis and the transformation into it.
+                    evals, evecs2 = su.eigh_gen(cs, cn)
+                    evecs = rt.dot(evecs2, evecs, transA='N', transB='N') # NOTE: no Hermitian transpose to evecs2
+                    evecs = evecs.to_global_array() # no need Hermitian transpose
+                    evecs2 = evecs2.to_global_array().T.conj()
+                    ac = 0.0
+                else:
+                    cs = cs.to_global_array()
+                    cn = cn.to_global_array()
+                    cs = np.dot(evecs, np.dot(cs, evecs.T.conj()))
+                    cn = np.dot(evecs, np.dot(cn, evecs.T.conj()))
+
+                    # Find the eigenbasis and the transformation into it.
+                    evals, evecs2, ac = kltransform.eigh_gen(cs, cn)
+                    evecs = np.dot(evecs2.T.conj(), evecs)
+            else:
+                cs = np.dot(evecs, np.dot(cs, evecs.T.conj()))
+                cn = np.dot(evecs, np.dot(cn, evecs.T.conj()))
+
+                # Find the eigenbasis and the transformation into it.
+                evals, evecs2, ac = kltransform.eigh_gen(cs, cn)
+                evecs = np.dot(evecs2.T.conj(), evecs)
+            if rank0:
+                print 'Second KL transfom for m = %d done.' % mi
 
             # Construct the inverse if required.
             if self.inverse:
