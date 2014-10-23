@@ -176,7 +176,7 @@ class KLTransform(config.Reader):
     # _cvfg = None
     # _cvsg = None
 
-    spcomm = mpiutil.world # splited communicator
+    # spcomm = mpiutil.world # splited communicator
     grid_shape = [2, 3] # process grid shape
     # pc = core.ProcessContext([2, 3], comm=spcomm) # process context
     # pc = None
@@ -610,9 +610,27 @@ class KLTransform(config.Reader):
 
         # core.initmpi([2, 3], block_shape=[2, 2])
 
+
+
+        core.ProcessContext([1, mpiutil.size], comm=None) # process context
+
+        grid_size = np.prod(self.grid_shape)
+        if mpiutil.size % grid_size == 0:
+            num_grp = mpiutil.size / grid_size  # number of groups
+        else:
+            raise Exception('Can not divide all processes evenly to each groups')
+        color = mpiutil.rank % num_grp
+        # orin_grp = mpiutil.world.Get_group()
+        # if color == 0:
+        #     new_grp = orin_grp.Incl([0, 2, 4, 6, 8, 10])
+        # else:
+        #     new_grp = orin_grp.Incl([1, 3, 5, 7, 9, 11])
+        # spcomm = mpiutil.world.Create(new_grp)
+        spcomm = mpiutil.world.Split(color, key=mpiutil.rank)
+
         # for mi in mpiutil.mpirange(self.telescope.mmax+1):
-        for mi in range(self.telescope.mmax+1):
-        # for mi in mpiutil.partition_list_alternate(range(self.telescope.mmax+1), color, numgrp):
+        # for mi in range(self.telescope.mmax+1):
+        for mi in mpiutil.partition_list_alternate(range(self.telescope.mmax+1), color, num_grp):
             # Make directory for kl transform
             try:
                 if not os.path.exists(self._evdir):
@@ -626,8 +644,8 @@ class KLTransform(config.Reader):
                     print "File %s exists. Skipping..." % self._evfile(mi)
                 continue
 
-            # self._transform_save_m(mi, spcomm)
-            self._transform_save_m(mi, self.spcomm)
+            self._transform_save_m(mi, spcomm)
+            # self._transform_save_m(mi, self.spcomm)
 
         # If we're part of an MPI run, synchronise here.
         mpiutil.barrier() # global synchronization
