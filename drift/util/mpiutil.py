@@ -72,7 +72,12 @@ def barrier():
 
 def bcast(data, root=0):
     if size > 1:
-        return _comm.bcast(data, root=0)
+        return _comm.bcast(data, root=root)
+
+
+def Gatherv(sendbuf, recvbuf, root=0):
+    if size > 1:
+        return _comm.Gatherv(sendbuf, recvbuf, root=root)
 
 
 def Allgatherv(sendbuf, recvbuf):
