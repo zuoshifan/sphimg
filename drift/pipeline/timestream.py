@@ -372,14 +372,19 @@ class Timestream(object):
 
 
     @property
+    def _almsdir(self):
+        return self.output_directory + '/alms/'
+
+    @property
     def _mapsdir(self):
         return self.output_directory + '/maps/'
 
     #======== Make map from uncleaned stream ============
 
-    def mapmake_full(self, nside, mapname, fwhm=0.0, rank_ratio=0.0, lcut=None):
+    def mapmake_full(self, nside, maptype, fwhm=0.0, rank_ratio=0.0, lcut=None):
 
-        mapfile = self._mapsdir + mapname
+        mapfile = self._mapsdir + 'map_%s.hdf5' % maptype
+        almfile = self._almsdir + 'alm_%s.hdf5' % maptype
 
         if os.path.exists(mapfile):
             if mpiutil.rank0:
@@ -413,21 +418,32 @@ class Timestream(object):
             if fwhm > 0.0:
                 alm = smoothalm(alm, fwhm=fwhm)
 
+            # Make directory for alms file
+            if not os.path.exists(self._almsdir):
+                os.makedirs(self._almsdir)
+
+            # Save alm
+            with h5py.File(almfile, 'w') as f:
+                f.create_dataset('/alm', data=alm)
+
+
             skymap = hputil.sphtrans_inv_sky(alm, nside)
 
             # Make directory for maps file
             if not os.path.exists(self._mapsdir):
                 os.makedirs(self._mapsdir)
 
+            # save map
             with h5py.File(mapfile, 'w') as f:
                 f.create_dataset('/map', data=skymap)
 
         mpiutil.barrier()
 
 
-    def mapmake_svd(self, nside, mapname, fwhm=0.0, rank_ratio=0.0, lcut=None):
+    def mapmake_svd(self, nside, maptype , fwhm=0.0, rank_ratio=0.0, lcut=None):
 
-        mapfile = self._mapsdir + mapname
+        mapfile = self._mapsdir + 'map_%s.hdf5' % maptype
+        almfile = self._almsdir + 'alm_%s.hdf5' % maptype
 
         if os.path.exists(mapfile):
             if mpiutil.rank0:
@@ -463,12 +479,22 @@ class Timestream(object):
             if fwhm > 0.0:
                 alm = smoothalm(alm, fwhm=fwhm)
 
+            # Make directory for alms file
+            if not os.path.exists(self._almsdir):
+                os.makedirs(self._almsdir)
+
+            # Save alm
+            with h5py.File(almfile, 'w') as f:
+                f.create_dataset('/alm', data=alm)
+
+
             skymap = hputil.sphtrans_inv_sky(alm, nside)
 
             # Make directory for maps file
             if not os.path.exists(self._mapsdir):
                 os.makedirs(self._mapsdir)
 
+            # save map
             with h5py.File(mapfile, 'w') as f:
                 f.create_dataset('/map', data=skymap)
 
@@ -622,9 +648,10 @@ class Timestream(object):
         mpiutil.barrier()
 
 
-    def mapmake_kl(self, nside, mapname, wiener=False,  rank_ratio=0.0, lcut=None):
+    def mapmake_kl(self, nside, maptype , wiener=False,  rank_ratio=0.0, lcut=None):
 
-        mapfile = self._mapsdir + mapname
+        mapfile = self._mapsdir + 'map_%s.hdf5' % maptype
+        almfile = self._almsdir + 'alm_%s.hdf5' % maptype
 
         if os.path.exists(mapfile):
             if mpiutil.rank0:
@@ -672,12 +699,22 @@ class Timestream(object):
 
             #     alm[..., mi] = alm_list[mi]
 
+            # Make directory for alms file
+            if not os.path.exists(self._almsdir):
+                os.makedirs(self._almsdir)
+
+            # Save alm
+            with h5py.File(almfile, 'w') as f:
+                f.create_dataset('/alm', data=alm)
+
+
             skymap = hputil.sphtrans_inv_sky(alm, nside)
 
             # Make directory for maps file
             if not os.path.exists(self._mapsdir):
                 os.makedirs(self._mapsdir)
 
+            # Save map
             with h5py.File(mapfile, 'w') as f:
                 f.create_dataset('/map', data=skymap)
 

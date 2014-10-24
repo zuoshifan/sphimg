@@ -180,7 +180,7 @@ class PipelineManager(config.Reader):
                     print '=' * 80
                     print "Generating full map (%s)..." % tsname
 
-                tsobj.mapmake_full(self.nside, 'map_full.hdf5', self.fullmap_fwhm, rank_ratio=self.full_rank_ratio, lcut=self.full_lcut)
+                tsobj.mapmake_full(self.nside, 'full', self.fullmap_fwhm, rank_ratio=self.full_rank_ratio, lcut=self.full_lcut)
 
 
             if self.generate_svdmodes:
@@ -198,7 +198,7 @@ class PipelineManager(config.Reader):
                     print '=' * 80
                     print "Generating SVD map (%s)..." % tsname
 
-                tsobj.mapmake_svd(self.nside, 'map_svd.hdf5', self.svdmap_fwhm, rank_ratio=self.svd_rank_ratio, lcut=self.svd_lcut)
+                tsobj.mapmake_svd(self.nside, 'svd', self.svdmap_fwhm, rank_ratio=self.svd_rank_ratio, lcut=self.svd_lcut)
 
 
             if self.generate_klmodes:
@@ -224,8 +224,7 @@ class PipelineManager(config.Reader):
 
                     tsobj.set_kltransform(klname)
 
-                    mapfile = 'map_%s.hdf5' % klname
-                    tsobj.mapmake_kl(self.nside, mapfile, wiener=self.wiener, rank_ratio=self.kl_rank_ratio, lcut=self.kl_lcut)
+                    tsobj.mapmake_kl(self.nside, klname, wiener=self.wiener, rank_ratio=self.kl_rank_ratio, lcut=self.kl_lcut)
 
 
             if self.generate_powerspectra:
