@@ -735,7 +735,7 @@ class KLTransform(config.Reader):
         def evfunc(mi):
             evf = np.zeros(self.beamtransfer.ndofmax)
 
-            # ensure that data files has already been saved to disk (file I/O is much slower than CPU)
+            # ensure that data files has already been saved to disk at the time of reading (file I/O is much slower than CPU)
             while True:
                 try:
                     with h5py.File(self._evfile(mi), 'r') as f:
@@ -745,7 +745,7 @@ class KLTransform(config.Reader):
 
                     break
                 except IOError:
-                        pass
+                    pass
 
             return evf
 

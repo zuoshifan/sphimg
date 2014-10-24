@@ -155,12 +155,19 @@ class DoubleKL(kltransform.KLTransform):
         def evfunc(mi):
             ta = np.zeros(shape, dtype=np.float64)
 
-            with h5py.File(self._evfile(mi), 'r') as f:
-                if f['evals_full'].shape[0] > 0:
-                    ev = f['evals_full'][:]
-                    fev = f['f_evals'][:]
-                    ta[0, -ev.size:] = ev
-                    ta[1, -fev.size:] = fev
+            # ensure that data files has already been saved to disk at the time of reading (file I/O is much slower than CPU)
+            while True:
+                try:
+                    with h5py.File(self._evfile(mi), 'r') as f:
+                        if f['evals_full'].shape[0] > 0:
+                            ev = f['evals_full'][:]
+                            fev = f['f_evals'][:]
+                            ta[0, -ev.size:] = ev
+                            ta[1, -fev.size:] = fev
+
+                    break
+                except IOError:
+                    pass
 
             return ta
 
