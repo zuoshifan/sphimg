@@ -41,6 +41,13 @@ def eigh_gen(A, B, lower=True, overwrite_a=True,  overwrite_b=True):
     # if MPI.COMM_WORLD.rank == 0:
     #     assert np.allclose(Lambda1, np.diag(L1).real)
 
+    if not (Lambda1 > 0.0).all():
+        add_const = - (np.min(Lambda1) * (1.0 + 1e-12) + 1e-60)
+        Lambda1 += add_const
+        if B.context.mpi_comm.Get_rank() == 0:
+            print "Second matrix probably not positive definite due to numerical issues. \
+Add a minimum constant %f to all of its eigenvalues to make it positive definite...." % add_const
+
     ihalfL = np.diag(Lambda1**(-0.5)).astype(R1H.dtype)
 
     # if MPI.COMM_WORLD.rank == 0:
