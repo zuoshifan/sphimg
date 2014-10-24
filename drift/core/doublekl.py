@@ -26,9 +26,9 @@ class DoubleKL(kltransform.KLTransform):
 
     foreground_threshold = config.Property(proptype=typeutil.nonnegative_float, default=100.0)
 
-    def _transform_m(self, mi, comm):
+    def _transform_m(self, mi, comm=None):
 
-        rank0 = True if comm.Get_rank == 0 else False
+        rank0 = True if comm is None or comm.Get_rank() == 0 else False
         if rank0:
             print "Solving for Eigenvalues...."
 
