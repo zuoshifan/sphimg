@@ -1,3 +1,4 @@
+import sys
 import time
 import os
 import re
@@ -328,6 +329,7 @@ class KLTransform(config.Reader):
             print 'Start signal covariance projection for m = %d...' % mi
             cvb_s = self.beamtransfer.project_matrix_sky_to_svd(mi, self.cvsg_m(mi))
             print 'Signal covariance projection for m = %d done.' % mi
+            sys.stdout.flush()
             if comm is not None and nside >= self.min_dist:
                 cvb_s = np.asfortranarray(cvb_s)
                 dist = True
@@ -345,6 +347,7 @@ class KLTransform(config.Reader):
             else:
                 cvb_n = np.zeros_like(cvb_s)
             print 'Foreground covariance projection for m = %d done.' % mi
+            sys.stdout.flush()
 
             # # Add in a small diagonal to regularise the noise matrix.
             # cnr = cvb_n.reshape((self.beamtransfer.ndof(mi), -1))
@@ -356,13 +359,18 @@ class KLTransform(config.Reader):
             if not self.use_thermal:
                 nc =  (1e-3 / self.telescope.tsys_flat)**2
 
-            # Construct diagonal noise power in telescope basis
-            bl = np.arange(self.telescope.npairs)
-            bl = np.concatenate((bl, bl))
-            npower = nc * self.telescope.noisepower(bl[np.newaxis, :], np.arange(self.telescope.nfreq)[:, np.newaxis]).reshape(self.telescope.nfreq, self.beamtransfer.ntel)
+            # # Construct diagonal noise power in telescope basis
+            # bl = np.arange(self.telescope.npairs)
+            # bl = np.concatenate((bl, bl))
+            # npower = nc * self.telescope.noisepower(bl[np.newaxis, :], np.arange(self.telescope.nfreq)[:, np.newaxis]).reshape(self.telescope.nfreq, self.beamtransfer.ntel)
 
-            # Project into SVD basis and add into noise matrix
-            cvb_n += self.beamtransfer.project_matrix_diagonal_telescope_to_svd(mi, npower)
+            # # Project into SVD basis and add into noise matrix
+            # cvb_n += self.beamtransfer.project_matrix_diagonal_telescope_to_svd(mi, npower)
+
+            # as we have pre-whitened the visibility in SVD projection, the projected instrumental noise has the identity covariance
+            # so self.beamtransfer.project_matrix_diagonal_telescope_to_svd(mi, nc*N) = nc * Nbar = nc * I
+            cvb_n[np.diag_indices_from(cvb_n)] += nc
+
             if comm is not None and nside >= self.min_dist:
                 cvb_n = np.asfortranarray(cvb_n)
                 dist = True
@@ -384,8 +392,14 @@ class KLTransform(config.Reader):
             blk_size = (nside - 1) / comm_size + 1
             pc = core.ProcessContext(self.grid_shape, comm=comm) # process context
             # overwrite the original matrices to reduce memory usage
+            if rank0:
+                print 'Start to distribute for m = %d...' % mi
             cvb_s = core.DistributedMatrix.from_global_array(cvb_s, rank=0, block_shape=[blk_size, blk_size], context=pc)
             cvb_n = core.DistributedMatrix.from_global_array(cvb_n, rank=1, block_shape=[blk_size, blk_size], context=pc)
+            comm.Barrier()
+            if rank0:
+                print 'Distribute for m = %d Done.' % mi
+                sys.stdout.flush()
             return cvb_s, cvb_n, True
         else:
             # nside = self.beamtransfer.ndof(mi)

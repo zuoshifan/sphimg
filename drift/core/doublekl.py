@@ -1,3 +1,4 @@
+import sys
 import os
 
 import numpy as np
@@ -61,6 +62,7 @@ class DoubleKL(kltransform.KLTransform):
             evecs = evecs.T.conj() # need Hermitian transpose
         if rank0:
             print 'First KL transfom for m = %d done.' % mi
+            sys.stdout.flush()
 
         # Get the indices that extract the high S/F ratio modes
         ind = np.where(evals > self.foreground_threshold)
@@ -82,52 +84,65 @@ class DoubleKL(kltransform.KLTransform):
 
         if evals.size > 0:
             # Generate the full S and N covariances in the truncated basis
-            self.use_thermal = True
-            # cs, cn = [ cv.reshape(nside, nside) for cv in self.sn_covariance(mi) ]
-            cs, cn, dist = self.sn_covariance(mi, comm)
+            cs = np.diag(evals) # Lambda_s
+            cn = np.dot(evecs, evecs.T.conj()) # P_s Nbar P_s^\dagger, where Nbar = I
+            cn[np.diag_indices_from(cn)] += 1.0 # I + P_s P_s^\dagger
             if rank0:
                 print 'Start second KL transfom for m = %d...' % mi
-            if dist:
-                # ensure no precess will have empty section of evecs
-                if evecs.shape[0] >= cs.block_shape[0] * comm.Get_size():
-                    # distribute calculation
-                    evecs = np.asfortranarray(evecs)
-                    evecs = core.DistributedMatrix.from_global_array(evecs, rank=0, block_shape=cs.block_shape, context=cs.context)
-                    cs = rt.dot(evecs, rt.dot(cs, evecs, transA='N', transB='C'), transA='N', transB='N')
-                    cn = rt.dot(evecs, rt.dot(cn, evecs, transA='N', transB='C'), transA='N', transB='N')
-
-                    # Find the eigenbasis and the transformation into it.
-                    evals, evecs2 = su.eigh_gen(cs, cn)
-                    evecs = rt.dot(evecs2, evecs, transA='N', transB='N') # NOTE: no Hermitian transpose to evecs2
-                    evecs = evecs.to_global_array() # no need Hermitian transpose
-                    evecs2 = evecs2.to_global_array().T.conj()
-                    ac = 0.0
-                else:
-                    cs = cs.to_global_array(rank=0)
-                    cn = cn.to_global_array(rank=1)
-                    if comm.Get_rank() == 0:
-                        cs = np.dot(evecs, np.dot(cs, evecs.T.conj()))
-                    else:
-                        cs = np.empty((evecs.shape[0], evecs.shape[0]), dtype=evecs.dtype)
-                    comm.Bcast(cs, root=0)
-                    if comm.Get_rank() == 1:
-                        cn = np.dot(evecs, np.dot(cn, evecs.T.conj()))
-                    else:
-                        cn = np.empty((evecs.shape[0], evecs.shape[0]), dtype=evecs.dtype)
-                    comm.Bcast(cn, root=1)
-
-                    # Find the eigenbasis and the transformation into it.
-                    evals, evecs2, ac = kltransform.eigh_gen(cs, cn)
-                    evecs = np.dot(evecs2.T.conj(), evecs)
-            else:
-                cs = np.dot(evecs, np.dot(cs, evecs.T.conj()))
-                cn = np.dot(evecs, np.dot(cn, evecs.T.conj()))
-
-                # Find the eigenbasis and the transformation into it.
-                evals, evecs2, ac = kltransform.eigh_gen(cs, cn)
-                evecs = np.dot(evecs2.T.conj(), evecs)
+            # Find the eigenbasis and the transformation into it.
+            evals, evecs2, ac = kltransform.eigh_gen(cs, cn)
+            evecs = np.dot(evecs2.T.conj(), evecs)
             if rank0:
                 print 'Second KL transfom for m = %d done.' % mi
+                sys.stdout.flush()
+
+
+            # self.use_thermal = True
+            # # cs, cn = [ cv.reshape(nside, nside) for cv in self.sn_covariance(mi) ]
+            # cs, cn, dist = self.sn_covariance(mi, comm)
+            # if rank0:
+            #     print 'Start second KL transfom for m = %d...' % mi
+            # if dist:
+            #     # ensure no precess will have empty section of evecs
+            #     if evecs.shape[0] >= cs.block_shape[0] * comm.Get_size():
+            #         # distribute calculation
+            #         evecs = np.asfortranarray(evecs)
+            #         evecs = core.DistributedMatrix.from_global_array(evecs, rank=0, block_shape=cs.block_shape, context=cs.context)
+            #         cs = rt.dot(evecs, rt.dot(cs, evecs, transA='N', transB='C'), transA='N', transB='N')
+            #         cn = rt.dot(evecs, rt.dot(cn, evecs, transA='N', transB='C'), transA='N', transB='N')
+
+            #         # Find the eigenbasis and the transformation into it.
+            #         evals, evecs2 = su.eigh_gen(cs, cn)
+            #         evecs = rt.dot(evecs2, evecs, transA='N', transB='N') # NOTE: no Hermitian transpose to evecs2
+            #         evecs = evecs.to_global_array() # no need Hermitian transpose
+            #         evecs2 = evecs2.to_global_array().T.conj()
+            #         ac = 0.0
+            #     else:
+            #         cs = cs.to_global_array(rank=0)
+            #         cn = cn.to_global_array(rank=1)
+            #         if comm.Get_rank() == 0:
+            #             cs = np.dot(evecs, np.dot(cs, evecs.T.conj()))
+            #         else:
+            #             cs = np.empty((evecs.shape[0], evecs.shape[0]), dtype=evecs.dtype)
+            #         comm.Bcast(cs, root=0)
+            #         if comm.Get_rank() == 1:
+            #             cn = np.dot(evecs, np.dot(cn, evecs.T.conj()))
+            #         else:
+            #             cn = np.empty((evecs.shape[0], evecs.shape[0]), dtype=evecs.dtype)
+            #         comm.Bcast(cn, root=1)
+
+            #         # Find the eigenbasis and the transformation into it.
+            #         evals, evecs2, ac = kltransform.eigh_gen(cs, cn)
+            #         evecs = np.dot(evecs2.T.conj(), evecs)
+            # else:
+            #     cs = np.dot(evecs, np.dot(cs, evecs.T.conj()))
+            #     cn = np.dot(evecs, np.dot(cn, evecs.T.conj()))
+
+            #     # Find the eigenbasis and the transformation into it.
+            #     evals, evecs2, ac = kltransform.eigh_gen(cs, cn)
+            #     evecs = np.dot(evecs2.T.conj(), evecs)
+            # if rank0:
+            #     print 'Second KL transfom for m = %d done.' % mi
 
             # Construct the inverse if required.
             if self.inverse:
