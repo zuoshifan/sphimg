@@ -103,10 +103,18 @@ class DoubleKL(kltransform.KLTransform):
                     evecs2 = evecs2.to_global_array().T.conj()
                     ac = 0.0
                 else:
-                    cs = cs.to_global_array()
-                    cn = cn.to_global_array()
-                    cs = np.dot(evecs, np.dot(cs, evecs.T.conj()))
-                    cn = np.dot(evecs, np.dot(cn, evecs.T.conj()))
+                    cs = cs.to_global_array(rank=0)
+                    cn = cn.to_global_array(rank=1)
+                    if comm.Get_rank() == 0:
+                        cs = np.dot(evecs, np.dot(cs, evecs.T.conj()))
+                    else:
+                        cs = np.empty((evecs.shape[0], evecs.shape[0]), dtype=evecs.dtype)
+                    comm.Bcast(cs, root=0)
+                    if comm.Get_rank() == 1:
+                        cn = np.dot(evecs, np.dot(cn, evecs.T.conj()))
+                    else:
+                        cn = np.empty((evecs.shape[0], evecs.shape[0]), dtype=evecs.dtype)
+                    comm.Bcast(cn, root=1)
 
                     # Find the eigenbasis and the transformation into it.
                     evals, evecs2, ac = kltransform.eigh_gen(cs, cn)

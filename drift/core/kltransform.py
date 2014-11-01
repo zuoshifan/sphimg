@@ -176,12 +176,9 @@ class KLTransform(config.Reader):
     # _cvfg = None
     # _cvsg = None
 
-    distribute = True # do distribute calculation if True
-    # spcomm = mpiutil.world # splited communicator
-    grid_shape = [2, 3] # process grid shape, take effect only if distribute == True
-    # pc = core.ProcessContext([2, 3], comm=spcomm) # process context
-    # pc = None
-    min_dist = 100 # minimum matrix size to do the distributed calculation, take effect only if distribute == True
+    distribute = config.Property(proptype=bool, default=True) # do distribute calculation if True
+    grid_shape = config.Property(proptype=list, default=[2, 3]) # process grid shape, take effect only if distribute == True
+    min_dist = config.Property(proptype=int, default=20000) # minimum matrix size to do the distributed calculation, take effect only if distribute == True
 
     @property
     def _cvdir(self):
@@ -349,9 +346,9 @@ class KLTransform(config.Reader):
                 cvb_n = np.zeros_like(cvb_s)
             print 'Foreground covariance projection for m = %d done.' % mi
 
-            # Add in a small diagonal to regularise the noise matrix.
-            cnr = cvb_n.reshape((self.beamtransfer.ndof(mi), -1))
-            cnr[np.diag_indices_from(cnr)] += self._foreground_regulariser * cnr.max()
+            # # Add in a small diagonal to regularise the noise matrix.
+            # cnr = cvb_n.reshape((self.beamtransfer.ndof(mi), -1))
+            # cnr[np.diag_indices_from(cnr)] += self._foreground_regulariser * cnr.max()
 
             # Even if noise=False, we still want a very small amount of
             # noise, so we multiply by a constant to turn Tsys -> 1 mK.
@@ -386,9 +383,10 @@ class KLTransform(config.Reader):
             # get block size according to nside
             blk_size = (nside - 1) / comm_size + 1
             pc = core.ProcessContext(self.grid_shape, comm=comm) # process context
-            dcvb_s = core.DistributedMatrix.from_global_array(cvb_s, rank=0, block_shape=[blk_size, blk_size], context=pc)
-            dcvb_n = core.DistributedMatrix.from_global_array(cvb_n, rank=1, block_shape=[blk_size, blk_size], context=pc)
-            return dcvb_s, dcvb_n, True
+            # overwrite the original matrices to reduce memory usage
+            cvb_s = core.DistributedMatrix.from_global_array(cvb_s, rank=0, block_shape=[blk_size, blk_size], context=pc)
+            cvb_n = core.DistributedMatrix.from_global_array(cvb_n, rank=1, block_shape=[blk_size, blk_size], context=pc)
+            return cvb_s, cvb_n, True
         else:
             # nside = self.beamtransfer.ndof(mi)
             if cvb_s is None:
