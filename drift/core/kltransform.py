@@ -412,6 +412,7 @@ class KLTransform(config.Reader):
             if comm is not None:
                 comm.Bcast(cvb_s, root=0) # more effective to use Bcast
                 comm.Bcast(cvb_n, root=1)
+                comm.Barrier()
             return cvb_s, cvb_n, False
 
         # if comm.Get_rank() == 0:
@@ -483,6 +484,9 @@ class KLTransform(config.Reader):
         # Construct dictionary of extra parameters to return
         evextra = {'ac' : ac}
 
+        if comm is not None:
+            comm.Barrier()
+
         return evals, evecs, inv, evextra
 
 
@@ -551,6 +555,9 @@ class KLTransform(config.Reader):
                 # Call hook which allows derived classes to save special information
                 # into the EV file.
                 self._ev_save_hook(f, evextra)
+
+        if comm is not None:
+            comm.Barrier()
 
 
     def _transform_save(self, regen=False):
@@ -659,15 +666,16 @@ class KLTransform(config.Reader):
             # spcomm = mpiutil.world.Create(new_grp)
             spcomm = mpiutil.world.Split(color, key=mpiutil.rank)
 
+        # Make directory for kl transform
+        try:
+            if not os.path.exists(self._evdir):
+                os.makedirs(self._evdir)
+        except OSError:
+            pass
+
         # for mi in mpiutil.mpirange(self.telescope.mmax+1):
         # for mi in range(self.telescope.mmax+1):
         for mi in mpiutil.partition_list_alternate(range(self.telescope.mmax+1), color, num_grp):
-            # Make directory for kl transform
-            try:
-                if not os.path.exists(self._evdir):
-                    os.makedirs(self._evdir)
-            except OSError:
-                pass
 
             if os.path.exists(self._evfile(mi)) and not regen:
                 if mpiutil.rank0:
@@ -681,6 +689,8 @@ class KLTransform(config.Reader):
         # If we're part of an MPI run, synchronise here.
         mpiutil.barrier() # global synchronization
         # spcomm.Barrier() # synchronize within individual communicators
+        if self.distribute == True:
+            spcomm.Free()
 
         if mpiutil.rank0:
         # if spcomm.Get_rank() == 0:
