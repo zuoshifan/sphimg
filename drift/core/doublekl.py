@@ -176,7 +176,7 @@ class DoubleKL(kltransform.KLTransform):
             print "Creating eigenvalues file for %s..." % self.klname
 
         def evfunc(mi):
-            ta = np.zeros(shape, dtype=np.float64)
+            ta = np.zeros((2, self.beamtransfer.ndofmax), dtype=np.float64)
 
             # ensure that data files has already been saved to disk at the time of reading (file I/O is much slower than CPU)
             while True:
@@ -194,9 +194,27 @@ class DoubleKL(kltransform.KLTransform):
 
             return ta
 
-        mlist = range(self.telescope.mmax+1)
-        shape = (2, self.beamtransfer.ndofmax)
-        evarray = kltransform.collect_m_array(mlist, evfunc, shape, np.float64)
+        # mlist = range(self.telescope.mmax+1)
+        # shape = (2, self.beamtransfer.ndofmax)
+        # evarray = kltransform.collect_m_array(mlist, evfunc, shape, np.float64)
+
+        ndofmax = self.beamtransfer.ndofmax
+        mis = self.telescope.mmax + 1
+        n_mis, s_mis, e_mis = mpiutil.split_all(mis)
+        n, s, e = mpiutil.split_local(mis)
+        lev = np.empty((n, 2, ndofmax), dtype=np.float64) # local evarray section
+
+        for mi in range(s, e):
+            lev[mi - s] = evfunc(mi)
+
+        if mpiutil.rank0:
+            evarray = np.empty((mis, 2, ndofmax), dtype=np.float64)
+        else:
+            evarray = None
+
+        sizes = n_mis * 2 * ndofmax
+        displ = s_mis * 2 * ndofmax
+        mpiutil.Gatherv(lev, [evarray, sizes, displ, mpiutil.DOUBLE])
 
         if mpiutil.rank0:
             with h5py.File(self._all_evfile, 'w') as f:

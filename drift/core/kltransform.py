@@ -771,9 +771,27 @@ class KLTransform(config.Reader):
 
             return evf
 
-        mlist = range(self.telescope.mmax+1)
-        shape = (self.beamtransfer.ndofmax, )
-        evarray = collect_m_array(mlist, evfunc, shape, np.float64)
+        # mlist = range(self.telescope.mmax+1)
+        # shape = (self.beamtransfer.ndofmax, )
+        # evarray = collect_m_array(mlist, evfunc, shape, np.float64)
+
+        ndofmax = self.beamtransfer.ndofmax
+        mis = self.telescope.mmax + 1
+        n_mis, s_mis, e_mis = mpiutil.split_all(mis)
+        n, s, e = mpiutil.split_local(mis)
+        lev = np.empty((n, ndofmax), dtype=np.float64) # local evarray section
+
+        for mi in range(s, e):
+            lev[mi - s] = evfunc(mi)
+
+        if mpiutil.rank0:
+            evarray = np.empty((mis, ndofmax), dtype=np.float64)
+        else:
+            evarray = None
+
+        sizes = n_mis * ndofmax
+        displ = s_mis * ndofmax
+        mpiutil.Gatherv(lev, [evarray, sizes, displ, mpiutil.DOUBLE])
 
         if mpiutil.rank0:
             with h5py.File(self._all_evfile, 'w') as f:
