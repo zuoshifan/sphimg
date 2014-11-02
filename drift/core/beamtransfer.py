@@ -602,7 +602,7 @@ class BeamTransfer(object):
             if mpiutil.rank0:
                 print "***** SVD projection time: %f" % (et - st)
             # Collect the spectrum into a single file.
-            # self._collect_svd_spectrum(regen)
+            self._collect_svd_spectrum(regen)
 
         # Save pickled telescope object
         if mpiutil.rank0:
@@ -987,7 +987,7 @@ class BeamTransfer(object):
 
         svd_func = lambda mi: self.beam_singularvalues(mi)
 
-        svdspectrum = kltransform.collect_m_array(range(self.telescope.mmax + 1), svd_func, (self.nfreq, self.svd_len,), np.float64)
+        svdspectrum = kltransform.collect_m_array(self.telescope.mmax+1, svd_func, (self.nfreq, self.svd_len,), np.float64)
 
         if mpiutil.rank0:
             print

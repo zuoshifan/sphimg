@@ -18,44 +18,63 @@ import scalapy.routines as rt
 from drift.util import scalapyutil as su
 
 
-def collect_m_arrays(mlist, func, shapes, dtype):
+# def collect_m_arrays(mlist, func, shapes, dtype):
 
-    data = [ (mi, func(mi)) for mi in mpiutil.partition_list_mpi(mlist) ]
+#     data = [ (mi, func(mi)) for mi in mpiutil.partition_list_mpi(mlist) ]
 
-    mpiutil.barrier()
+#     mpiutil.barrier()
 
-    if mpiutil.rank0 and mpiutil.size == 1:
-        p_all = [data]
-    else:
-        p_all = mpiutil.world.gather(data, root=0)
+#     if mpiutil.rank0 and mpiutil.size == 1:
+#         p_all = [data]
+#     else:
+#         p_all = mpiutil.world.gather(data, root=0)
 
-    mpiutil.barrier() # Not sure if this barrier really does anything,
-                      # but hoping to stop collect breaking
+#     mpiutil.barrier() # Not sure if this barrier really does anything,
+#                       # but hoping to stop collect breaking
 
-    marrays = None
+#     marrays = None
+#     if mpiutil.rank0:
+#         marrays = [np.zeros((len(mlist),) + shape, dtype=dtype) for shape in shapes]
+
+#         for p_process in p_all:
+
+#             for mi, result in p_process:
+
+#                 for si in range(len(shapes)):
+#                     if result[si] is not None:
+#                         marrays[si][mi] = result[si]
+
+#     mpiutil.barrier()
+
+#     return marrays
+
+
+# def collect_m_array(mlist, func, shape, dtype):
+
+#     res = collect_m_arrays(mlist, lambda mi: [func(mi)], [shape], dtype)
+
+#     return res[0] if mpiutil.rank0 else None
+
+
+def collect_m_array(mis, func, shape, dtype):
+
+    n_mis, s_mis, e_mis = mpiutil.split_all(mis)
+    n, s, e = mpiutil.split_local(mis)
+    lev = np.empty((n,) + shape, dtype=dtype) # local evarray section
+
+    for mi in range(s, e):
+        lev[mi - s] = func(mi)
+
     if mpiutil.rank0:
-        marrays = [np.zeros((len(mlist),) + shape, dtype=dtype) for shape in shapes]
+        evarray = np.empty((mis,) + shape, dtype=dtype)
+    else:
+        evarray = None
 
-        for p_process in p_all:
+    sizes = n_mis * np.prod(shape)
+    displ = s_mis * np.prod(shape)
+    mpiutil.Gatherv(lev, [evarray, sizes, displ, mpiutil.DOUBLE])
 
-            for mi, result in p_process:
-
-                for si in range(len(shapes)):
-                    if result[si] is not None:
-                        marrays[si][mi] = result[si]
-
-    mpiutil.barrier()
-
-    return marrays
-
-
-def collect_m_array(mlist, func, shape, dtype):
-
-    res = collect_m_arrays(mlist, lambda mi: [func(mi)], [shape], dtype)
-
-    return res[0] if mpiutil.rank0 else None
-
-
+    return evarray
 
 
 def eigh_gen(A, B):
@@ -771,27 +790,9 @@ class KLTransform(config.Reader):
 
             return evf
 
-        # mlist = range(self.telescope.mmax+1)
-        # shape = (self.beamtransfer.ndofmax, )
-        # evarray = collect_m_array(mlist, evfunc, shape, np.float64)
-
-        ndofmax = self.beamtransfer.ndofmax
         mis = self.telescope.mmax + 1
-        n_mis, s_mis, e_mis = mpiutil.split_all(mis)
-        n, s, e = mpiutil.split_local(mis)
-        lev = np.empty((n, ndofmax), dtype=np.float64) # local evarray section
-
-        for mi in range(s, e):
-            lev[mi - s] = evfunc(mi)
-
-        if mpiutil.rank0:
-            evarray = np.empty((mis, ndofmax), dtype=np.float64)
-        else:
-            evarray = None
-
-        sizes = n_mis * ndofmax
-        displ = s_mis * ndofmax
-        mpiutil.Gatherv(lev, [evarray, sizes, displ, mpiutil.DOUBLE])
+        shape = (self.beamtransfer.ndofmax, )
+        evarray = collect_m_array(mis, evfunc, shape, np.float64)
 
         if mpiutil.rank0:
             with h5py.File(self._all_evfile, 'w') as f:
