@@ -346,29 +346,90 @@ class Timestream(object):
             Global array of alm.
         """
 
-        # Synchronize
-        # barrier()
-
-        # If we're only on a single node, then just perform without MPI
-        # if size == 1 and rank == 0:
-        #     return [func(item) for item in glist]
-
         n_mis, s_mis, e_mis = mpiutil.split_all(nmodes)
         n, s, e = mpiutil.split_local(nmodes)
 
-        alm = np.zeros((self.telescope.lmax + 1, self.telescope.nfreq, self.telescope.num_pol_sky,
-                        self.telescope.lmax + 1), dtype=np.complex128)
+        lside = self.telescope.lmax + 1
+        nfreq = self.telescope.nfreq
+        npol = self.telescope.num_pol_sky
+        gsize = (lside, nfreq, npol, lside) # global alm shape
+        lsize = (n, nfreq, npol, lside) # local alm shape
+        dtype = np.complex128
+        lalm = np.empty(lsize, dtype=dtype) # local alm section
 
         for mi in range(s, e):
-            alm[mi] = func(mi)
+            lalm[mi - s] = func(mi)
 
-        misize = self.telescope.nfreq * self.telescope.num_pol_sky * (self.telescope.lmax + 1)
-        sizes = n_mis * misize
-        displ = s_mis * misize
+        if mpiutil.rank0:
+            # usally lside > nmodes, so alm = 0 for those lside > nmodes section
+            alm = np.zeros(gsize, dtype=dtype)
+        else:
+            alm = None
 
-        mpiutil.Allgatherv(mpiutil.IN_PLACE, [alm, sizes, displ, mpiutil.typemap(alm.dtype)])
+        sizes = n_mis * (nfreq * npol * lside)
+        displ = s_mis * (nfreq * npol * lside)
+        mpiutil.Gatherv(lalm, [alm, sizes, displ, mpiutil.typemap(dtype)], root=0)
 
-        return alm.transpose((1, 2, 3, 0))
+        alm = alm.transpose((1, 2, 3, 0)) if alm is not None else None
+
+        return alm
+
+        ##################################################
+        # alm = np.zeros((self.telescope.lmax + 1, self.telescope.nfreq, self.telescope.num_pol_sky,
+        #                 self.telescope.lmax + 1), dtype=np.complex128)
+
+        # for mi in range(s, e):
+        #     alm[mi] = func(mi)
+
+        # misize = self.telescope.nfreq * self.telescope.num_pol_sky * (self.telescope.lmax + 1)
+        # sizes = n_mis * misize
+        # displ = s_mis * misize
+
+        # mpiutil.Allgatherv(mpiutil.IN_PLACE, [alm, sizes, displ, mpiutil.typemap(alm.dtype)])
+
+        # return alm.transpose((1, 2, 3, 0))
+
+        # #################################################
+        # lside = self.telescope.lmax + 1
+        # nfreq = self.telescope.nfreq
+        # npol = self.telescope.num_pol_sky
+        # sizes = (nfreq, npol, lside, lside)
+        # subsizes = (nfreq, npol, lside, n)
+        # lalm = np.empty(subsizes, dtype=np.complex128) # local alm section
+
+        # for mi in range(s, e):
+        #     lalm[..., mi - s] = func(mi)
+
+        # if mpiutil.rank0:
+        #     # usally lside > nmodes, so alm = 0 for those lside > nmodes section
+        #     alm = np.zeros(sizes, dtype=np.complex128)
+        # else:
+        #     alm = None
+
+        # comm = mpiutil.world
+        # mpi_complex = mpiutil.typemap(np.complex128)
+        # # create newtype corresponding to the local alm section in the full alm array
+        # subalm = mpi_complex.Create_subarray(sizes, subsizes, (0, 0, 0, s)).Commit() # default order=ORDER_C
+
+        # # Each process should send its local sections.
+        # sreq = comm.Isend([lalm, mpi_complex], dest=0, tag=0)
+
+        # if mpiutil.rank0:
+        #     # Post each receive
+        #     reqs = [ comm.Irecv([alm, subalm], source=sr, tag=0) for sr in range(comm.size) ]
+
+        #     # Wait for requests to complete
+        #     mpiutil.Prequest.Waitall(reqs)
+
+        # # Wait on send request. Important, as can get weird synchronisation
+        # # bugs otherwise as processes exit before completing their send.
+        # sreq.Wait()
+
+        # # mpiutil.barrier()
+
+        # return alm
+
+
 
 
     @property
@@ -391,42 +452,44 @@ class Timestream(object):
                 print "File %s exists. Skipping..." % mapfile
             mpiutil.barrier()
             return
+        elif os.path.exists(almfile):
+            if mpiutil.rank0:
+                print "File %s exists. Read from it..." % almfile
+                with h5py.File(almfile, 'r') as f:
+                    alm = f['alm'][...]
+            else:
+                alm = None
+        else:
 
-        def _make_alm(mi):
+            def _make_alm(mi):
 
-            print "Making %i" % mi
+                print "Making %i" % mi
 
-            mmode = self.mmode(mi)
-            sphmode = self.beamtransfer.project_vector_telescope_to_sky(mi, mmode, rank_ratio, lcut)
+                mmode = self.mmode(mi)
+                sphmode = self.beamtransfer.project_vector_telescope_to_sky(mi, mmode, rank_ratio, lcut)
 
-            return sphmode
+                return sphmode
 
-        alm = self.parallel_map(_make_alm, self.telescope.mmax + 1)
+            alm = self.parallel_map(_make_alm, self.telescope.mmax + 1)
 
-        # alm_list = mpiutil.parallel_map(_make_alm, range(self.telescope.mmax + 1))
+            # alm_list = mpiutil.parallel_map(_make_alm, range(self.telescope.mmax + 1))
+
+            if mpiutil.rank0:
+
+                # Smooth alm with a Gaussian symmetric beam function.
+                if fwhm > 0.0:
+                    alm = smoothalm(alm, fwhm=fwhm)
+
+                # Make directory for alms file
+                if not os.path.exists(self._almsdir):
+                    os.makedirs(self._almsdir)
+
+                # Save alm
+                with h5py.File(almfile, 'w') as f:
+                    f.create_dataset('/alm', data=alm)
+
 
         if mpiutil.rank0:
-
-        #     alm = np.zeros((self.telescope.nfreq, self.telescope.num_pol_sky, self.telescope.lmax + 1,
-        #                     self.telescope.lmax + 1), dtype=np.complex128)
-
-        #     for mi in range(self.telescope.mmax + 1):
-
-        #         alm[..., mi] = alm_list[mi]
-
-            # Smooth alm with a Gaussian symmetric beam function.
-            if fwhm > 0.0:
-                alm = smoothalm(alm, fwhm=fwhm)
-
-            # Make directory for alms file
-            if not os.path.exists(self._almsdir):
-                os.makedirs(self._almsdir)
-
-            # Save alm
-            with h5py.File(almfile, 'w') as f:
-                f.create_dataset('/alm', data=alm)
-
-
             skymap = hputil.sphtrans_inv_sky(alm, nside)
 
             # Make directory for maps file
@@ -450,44 +513,46 @@ class Timestream(object):
                 print "File %s exists. Skipping..." % mapfile
             mpiutil.barrier()
             return
+        elif os.path.exists(almfile):
+            if mpiutil.rank0:
+                print "File %s exists. Read from it..." % almfile
+                with h5py.File(almfile, 'r') as f:
+                    alm = f['alm'][...]
+            else:
+                alm = None
+        else:
 
-        self.generate_mmodes_svd()
+            self.generate_mmodes_svd()
 
-        def _make_alm(mi):
+            def _make_alm(mi):
 
-            print "Making %i" % mi
+                print "Making %i" % mi
 
-            svdmode = self.mmode_svd(mi)
-            sphmode = self.beamtransfer.project_vector_svd_to_sky(mi, svdmode, rank_ratio, lcut)
+                svdmode = self.mmode_svd(mi)
+                sphmode = self.beamtransfer.project_vector_svd_to_sky(mi, svdmode, rank_ratio, lcut)
 
-            return sphmode
+                return sphmode
 
-        alm = self.parallel_map(_make_alm, self.telescope.mmax + 1)
+            alm = self.parallel_map(_make_alm, self.telescope.mmax + 1)
 
-        # alm_list = mpiutil.parallel_map(_make_alm, range(self.telescope.mmax + 1))
+            # alm_list = mpiutil.parallel_map(_make_alm, range(self.telescope.mmax + 1))
+
+            if mpiutil.rank0:
+
+                # Smooth alm with a Gaussian symmetric beam function.
+                if fwhm > 0.0:
+                    alm = smoothalm(alm, fwhm=fwhm)
+
+                # Make directory for alms file
+                if not os.path.exists(self._almsdir):
+                    os.makedirs(self._almsdir)
+
+                # Save alm
+                with h5py.File(almfile, 'w') as f:
+                    f.create_dataset('/alm', data=alm)
+
 
         if mpiutil.rank0:
-
-            # alm = np.zeros((self.telescope.nfreq, self.telescope.num_pol_sky, self.telescope.lmax + 1,
-            #                 self.telescope.lmax + 1), dtype=np.complex128)
-
-            # for mi in range(self.telescope.mmax + 1):
-
-            #     alm[..., mi] = alm_list[mi]
-
-            # Smooth alm with a Gaussian symmetric beam function.
-            if fwhm > 0.0:
-                alm = smoothalm(alm, fwhm=fwhm)
-
-            # Make directory for alms file
-            if not os.path.exists(self._almsdir):
-                os.makedirs(self._almsdir)
-
-            # Save alm
-            with h5py.File(almfile, 'w') as f:
-                f.create_dataset('/alm', data=alm)
-
-
             skymap = hputil.sphtrans_inv_sky(alm, nside)
 
             # Make directory for maps file
@@ -611,9 +676,10 @@ class Timestream(object):
             return evf
 
 
-        mlist = range(self.telescope.mmax+1)
+        # mlist = range(self.telescope.mmax+1)
+        mis = self.telescope.mmax + 1
         shape = (self.beamtransfer.ndofmax, )
-        evarray = kltransform.collect_m_array(mlist, evfunc, shape, np.complex128)
+        evarray = kltransform.collect_m_array(mis, evfunc, shape, np.complex128)
 
         if mpiutil.rank0:
             print
@@ -658,56 +724,65 @@ class Timestream(object):
                 print "File %s exists. Skipping..." % mapfile
             mpiutil.barrier()
             return
+        elif os.path.exists(almfile):
+            if mpiutil.rank0:
+                print "File %s exists. Read from it..." % almfile
+                with h5py.File(almfile, 'r') as f:
+                    alm = f['alm'][...]
+            else:
+                alm = None
+        else:
 
-        kl = self.manager.kltransforms[self.klname]
+            kl = self.manager.kltransforms[self.klname]
 
-        if not kl.inverse:
-            raise Exception("Need the inverse to make a meaningful map.")
+            if not kl.inverse:
+                raise Exception("Need the inverse to make a meaningful map.")
 
-        def _make_alm(mi):
-            print "Making %i" % mi
+            def _make_alm(mi):
+                print "Making %i" % mi
 
-            klmode = self.mmode_kl(mi)
+                klmode = self.mmode_kl(mi)
 
-            if wiener:
-                evals = kl.evals_m(mi, self.klthreshold)
+                if wiener:
+                    evals = kl.evals_m(mi, self.klthreshold)
 
-                if evals is not None:
-                    klmode *= (evals / (1.0 + evals))
+                    if evals is not None:
+                        klmode *= (evals / (1.0 + evals))
 
-            isvdmode = kl.project_vector_kl_to_svd(mi, klmode, threshold=self.klthreshold)
+                isvdmode = kl.project_vector_kl_to_svd(mi, klmode, threshold=self.klthreshold)
 
-            sphmode = self.beamtransfer.project_vector_svd_to_sky(mi, isvdmode, rank_ratio, lcut)
+                sphmode = self.beamtransfer.project_vector_svd_to_sky(mi, isvdmode, rank_ratio, lcut)
 
-            return sphmode
+                return sphmode
 
-        alm = self.parallel_map(_make_alm, self.telescope.mmax + 1)
+            alm = self.parallel_map(_make_alm, self.telescope.mmax + 1)
 
-        # alm_list = mpiutil.parallel_map(_make_alm, range(self.telescope.mmax + 1))
+            # alm_list = mpiutil.parallel_map(_make_alm, range(self.telescope.mmax + 1))
+
+            if mpiutil.rank0:
+
+                # alm = np.zeros((self.telescope.nfreq, self.telescope.num_pol_sky, self.telescope.lmax + 1,
+                #                 self.telescope.lmax + 1), dtype=np.complex128)
+
+                # # Determine whether to use m=0 or not
+                if self.no_m_zero:
+                    alm[..., 0] = 0
+                # mlist = range(1 if self.no_m_zero else 0, self.telescope.mmax + 1)
+
+                # for mi in mlist:
+
+                #     alm[..., mi] = alm_list[mi]
+
+                # Make directory for alms file
+                if not os.path.exists(self._almsdir):
+                    os.makedirs(self._almsdir)
+
+                # Save alm
+                with h5py.File(almfile, 'w') as f:
+                    f.create_dataset('/alm', data=alm)
+
 
         if mpiutil.rank0:
-
-            # alm = np.zeros((self.telescope.nfreq, self.telescope.num_pol_sky, self.telescope.lmax + 1,
-            #                 self.telescope.lmax + 1), dtype=np.complex128)
-
-            # # Determine whether to use m=0 or not
-            if self.no_m_zero:
-                alm[..., 0] = 0
-            # mlist = range(1 if self.no_m_zero else 0, self.telescope.mmax + 1)
-
-            # for mi in mlist:
-
-            #     alm[..., mi] = alm_list[mi]
-
-            # Make directory for alms file
-            if not os.path.exists(self._almsdir):
-                os.makedirs(self._almsdir)
-
-            # Save alm
-            with h5py.File(almfile, 'w') as f:
-                f.create_dataset('/alm', data=alm)
-
-
             skymap = hputil.sphtrans_inv_sky(alm, nside)
 
             # Make directory for maps file

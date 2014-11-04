@@ -72,7 +72,7 @@ def collect_m_array(mis, func, shape, dtype):
 
     sizes = n_mis * np.prod(shape)
     displ = s_mis * np.prod(shape)
-    mpiutil.Gatherv(lev, [evarray, sizes, displ, mpiutil.DOUBLE])
+    mpiutil.Gatherv(lev, [evarray, sizes, displ, mpiutil.typemap(dtype)])
 
     return evarray
 
