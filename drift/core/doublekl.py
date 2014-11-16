@@ -51,11 +51,11 @@ class DoubleKL(kltransform.KLTransform):
         if rank0:
             print 'Start first KL transfom for m = %d...' % mi
         if dist:
-            evals, evecs = su.eigh_gen(cs, cn)
-            evecs = evecs.to_global_array() # no need Hermitian transpose
-            # evals, evecs = rt.eigh(cs, cn)
-            # evecs = evecs.to_global_array()
-            # evecs = evecs.T.conj()
+            # evals, evecs = su.eigh_gen(cs, cn)
+            # evecs = evecs.to_global_array() # no need Hermitian transpose
+            evals, evecs = rt.eigh(cs, cn)
+            evecs = evecs.to_global_array()
+            evecs = evecs.T.conj()
             ac = 0.0
         else:
             evals, evecs, ac = kltransform.eigh_gen(cs, cn)

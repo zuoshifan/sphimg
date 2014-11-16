@@ -476,11 +476,11 @@ class KLTransform(config.Reader):
         # Perform the generalised eigenvalue problem to get the KL-modes.
         st = time.time()
         if dist:
-            evals, evecs = su.eigh_gen(cvb_sr, cvb_nr)
-            evecs = evecs.to_global_array() # no need Hermitian transpose
-            # evals, evecs = rt.eigh(cvb_sr, cvb_nr)
-            # evecs = evecs.to_global_array()
-            # evecs = evecs.T.conj()
+            # evals, evecs = su.eigh_gen(cvb_sr, cvb_nr)
+            # evecs = evecs.to_global_array() # no need Hermitian transpose
+            evals, evecs = rt.eigh(cvb_sr, cvb_nr)
+            evecs = evecs.to_global_array()
+            evecs = evecs.T.conj()
             ac = 0.0
         else:
             # print 'Process %d: ' % comm.Get_rank(), cvb_sr, cvb_nr
