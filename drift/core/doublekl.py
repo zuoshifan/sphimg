@@ -54,8 +54,8 @@ class DoubleKL(kltransform.KLTransform):
             # evals, evecs = su.eigh_gen(cs, cn)
             # evecs = evecs.to_global_array() # no need Hermitian transpose
             evals, evecs = rt.eigh(cs, cn)
-            evecs = evecs.to_global_array()
-            evecs = evecs.T.conj()
+            evecs = evecs.to_global_array(rank=0)
+            evecs = evecs.T.conj() if evecs is not None else None
             ac = 0.0
         else:
             evals, evecs, ac = kltransform.eigh_gen(cs, cn)
@@ -73,28 +73,26 @@ class DoubleKL(kltransform.KLTransform):
         # Construct inverse transformation if required
         inv = None
         if self.inverse:
-            inv = kltransform.inv_gen(evecs).T
+            inv = kltransform.inv_gen(evecs).T if evecs is not None else None
 
         # Construct the foreground removed subset of the space
         evals = evals[ind]
-        evecs = evecs[ind]
-        inv = inv[ind] if self.inverse else None
+        evecs = evecs[ind] if evecs is not None else None
+        inv = inv[ind] if self.inverse and inv is not None else None
         if rank0:
             print "Modes with S/F > %f: %i of %i" % (self.foreground_threshold, evals.size, nside)
 
-        if evals.size > 0:
+        if evals.size > 0 and rank0:
             # Generate the full S and N covariances in the truncated basis
             cs = np.diag(evals) # Lambda_s
             cn = np.dot(evecs, evecs.T.conj()) # P_s Nbar P_s^\dagger, where Nbar = I
             cn[np.diag_indices_from(cn)] += 1.0 # I + P_s P_s^\dagger
-            if rank0:
-                print 'Start second KL transfom for m = %d...' % mi
+            print 'Start second KL transfom for m = %d...' % mi
             # Find the eigenbasis and the transformation into it.
             evals, evecs2, ac = kltransform.eigh_gen(cs, cn)
             evecs = np.dot(evecs2.T.conj(), evecs)
-            if rank0:
-                print 'Second KL transfom for m = %d done.' % mi
-                sys.stdout.flush()
+            print 'Second KL transfom for m = %d done.' % mi
+            sys.stdout.flush()
 
 
             # self.use_thermal = True
@@ -149,6 +147,9 @@ class DoubleKL(kltransform.KLTransform):
                 inv2 = kltransform.inv_gen(evecs2)
                 inv = np.dot(inv2, inv)
 
+        if comm is not None:
+            comm.Barrier()
+
         return evals, evecs, inv, evextra
 
 
@@ -202,3 +203,5 @@ class DoubleKL(kltransform.KLTransform):
             with h5py.File(self._all_evfile, 'w') as f:
                 f.create_dataset('evals', data=evarray[:, 0], compression='lzf')
                 f.create_dataset('f_evals', data=evarray[:, 1], compression='lzf')
+
+        mpiutil.barrier()

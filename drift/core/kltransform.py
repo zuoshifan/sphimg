@@ -479,8 +479,8 @@ class KLTransform(config.Reader):
             # evals, evecs = su.eigh_gen(cvb_sr, cvb_nr)
             # evecs = evecs.to_global_array() # no need Hermitian transpose
             evals, evecs = rt.eigh(cvb_sr, cvb_nr)
-            evecs = evecs.to_global_array()
-            evecs = evecs.T.conj()
+            evecs = evecs.to_global_array(rank=0)
+            evecs = evecs.T.conj() if evecs is not None else None
             ac = 0.0
         else:
             # print 'Process %d: ' % comm.Get_rank(), cvb_sr, cvb_nr
@@ -498,7 +498,7 @@ class KLTransform(config.Reader):
         # Generate inverse if required
         inv = None
         if self.inverse:
-            inv = inv_gen(evecs).T
+            inv = inv_gen(evecs).T if evecs is not None else None
 
         # Construct dictionary of extra parameters to return
         evextra = {'ac' : ac}
