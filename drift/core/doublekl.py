@@ -77,19 +77,34 @@ class DoubleKL(kltransform.KLTransform):
             if dist:
                 inv = rt.pinv2(evecs, overwrite_a=False).T # NOTE: must overwrite_a = False
                 # due to bugs in f2py, here convert to numpy array
-                inv = inv.to_global_array(rank=0)
-                evecs = evecs.to_global_array(rank=0)
+                # inv = inv.to_global_array(rank=0)
+                # evecs = evecs.to_global_array(rank=0)
             else:
                 inv = kltransform.inv_gen(evecs).T if evecs is not None else None
 
-        if rank0:
-            # Get the indices that extract the high S/F ratio modes
-            ind = np.where(evals > self.foreground_threshold)
+        if dist:
+            ind = np.searchsorted(evals, self.foreground_threshold)
+            # copy to numpy array
+            evals = evals[ind:]
+            dtype = evecs.dtype
+            if ind < nside:
+                evecs = evecs.self2np(srow=ind, scol=0, rank=0)
+            else:
+                evecs = np.array([], dtype=dtype).reshape(0, nside)
+            if self.inverse:
+                if ind < nside:
+                    inv = inv.self2np(srow=ind, scol=0, rank=0)
+                else:
+                    inv = np.array([], dtype=dtype).reshape(0, nside)
+        else:
+            if rank0:
+                # Get the indices that extract the high S/F ratio modes
+                ind = np.where(evals > self.foreground_threshold)
+                # Construct the foreground removed subset of the space
+                evals = evals[ind]
+                evecs = evecs[ind]
+                inv = inv[ind] if self.inverse else None
 
-            # Construct the foreground removed subset of the space
-            evals = evals[ind]
-            evecs = evecs[ind]
-            inv = inv[ind] if self.inverse else None
         if rank0:
             print "Modes with S/F > %f: %i of %i" % (self.foreground_threshold, evals.size, nside)
 
