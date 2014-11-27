@@ -843,7 +843,7 @@ class PSExact(PSEstimation):
         clarray_m = self.clarray[bi, mi:, :, :] # l >= m section
         clarray_m.shape = (1, 1) + clarray_m.shape
         # clarray_m = self.clarray[bi].reshape((1, 1) + self.clarray[bi].shape) # l >= m section
-        svdmat = self.kltrans.beamtransfer.project_matrix_sky_to_svd(mi, clarray_m, temponly=True)
+        svdmat, dist = self.kltrans.beamtransfer.project_matrix_sky_to_svd(mi, clarray_m, temponly=True)
         return self.kltrans.project_matrix_svd_to_kl(mi, svdmat, self.threshold)
 
 

@@ -1202,11 +1202,17 @@ class BeamTransfer(object):
             indices even if `temponly=True`.
         temponly: boolean
             Force projection of temperature (TT) part only (default: False)
+        pc :
+            Process context to do distributed calculation if not Non.
+        min_dist : interger
+            Minimum matrix size to do distributed calculation.
 
         Returns
         -------
-        tmat : np.ndarray [nsvd, nsvd]
+        tmat : np.ndarray [nsvd, nsvd] or DistributedMatrix
             Covariance in SVD basis.
+        dist : Boolean
+            Return distributed matrix if True, else np.ndarray.
         """
 
         npol = 1 if temponly else self.telescope.num_pol_sky

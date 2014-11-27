@@ -33,7 +33,7 @@ class DoubleKL(kltransform.KLTransform):
         if rank0:
             print "Solving for Eigenvalues...."
 
-        # Fetch the covariance matrices to diagonalise
+
         nside = self.beamtransfer.ndof(mi)
         if rank0:
             print 'nside = ', nside
@@ -44,6 +44,7 @@ class DoubleKL(kltransform.KLTransform):
 
         # Construct S and F matrices and regularise foregrounds
         self.use_thermal = False
+        # Fetch the covariance matrices to diagonalise
         # cs, cn = [ cv.reshape(nside, nside) for cv in self.sn_covariance(mi) ]
         cs, cn, dist = self.sn_covariance(mi, comm)
 
@@ -54,35 +55,49 @@ class DoubleKL(kltransform.KLTransform):
             # evals, evecs = su.eigh_gen(cs, cn)
             # evecs = evecs.to_global_array() # no need Hermitian transpose
             evals, evecs = rt.eigh(cs, cn)
-            evecs = evecs.to_global_array(rank=0)
-            evecs = evecs.T.conj() if evecs is not None else None
+            evecs = evecs.H # Hermitian conjugate of the distributed matrix
+            # evecs = evecs.to_global_array(rank=0)
+            # evecs = evecs.T.conj() if evecs is not None else None
             ac = 0.0
         else:
-            evals, evecs, ac = kltransform.eigh_gen(cs, cn)
-            evecs = evecs.T.conj() # need Hermitian transpose
+            if rank0:
+                evals, evecs, ac = kltransform.eigh_gen(cs, cn)
+                evecs = evecs.T.conj() # need Hermitian transpose
+            else:
+                evals, evecs, ac = None, None, 0.0
         if rank0:
             print 'First KL transfom for m = %d done.' % mi
             sys.stdout.flush()
 
-        # Get the indices that extract the high S/F ratio modes
-        ind = np.where(evals > self.foreground_threshold)
-
         # Construct evextra dictionary (holding foreground ratio)
-        evextra = { 'ac' : ac, 'f_evals' : evals.copy() }
+        if rank0:
+            evextra = { 'ac' : ac, 'f_evals' : evals.copy() }
+        else:
+            evextra = None
 
         # Construct inverse transformation if required
         inv = None
         if self.inverse:
-            inv = kltransform.inv_gen(evecs).T if evecs is not None else None
+            if dist:
+                inv = rt.pinv2(evecs, overwrite_a=False).T # NOTE: must overwrite_a = False
+                # due to bugs in f2py, here convert to numpy array
+                inv = inv.to_global_array(rank=0)
+                evecs = evecs.to_global_array(rank=0)
+            else:
+                inv = kltransform.inv_gen(evecs).T if evecs is not None else None
 
-        # Construct the foreground removed subset of the space
-        evals = evals[ind]
-        evecs = evecs[ind] if evecs is not None else None
-        inv = inv[ind] if self.inverse and inv is not None else None
+        if rank0:
+            # Get the indices that extract the high S/F ratio modes
+            ind = np.where(evals > self.foreground_threshold)
+
+            # Construct the foreground removed subset of the space
+            evals = evals[ind]
+            evecs = evecs[ind]
+            inv = inv[ind] if self.inverse else None
         if rank0:
             print "Modes with S/F > %f: %i of %i" % (self.foreground_threshold, evals.size, nside)
 
-        if evals.size > 0 and rank0:
+        if rank0 and evals.size > 0:
             # Generate the full S and N covariances in the truncated basis
             cs = np.diag(evals) # Lambda_s
             cn = np.dot(evecs, evecs.T.conj()) # P_s Nbar P_s^\dagger, where Nbar = I
