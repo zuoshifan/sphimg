@@ -30,6 +30,7 @@ import h5py
 from drift.util import mpiutil, util, blockla
 from drift.core import kltransform
 
+from scalapy import core
 
 
 def svd_gen(A, errmsg=None, *args, **kwargs):
@@ -1189,7 +1190,7 @@ class BeamTransfer(object):
         return [fi for fi in range(self.nfreq) if (num[fi] > 0)]
 
 
-    def project_matrix_sky_to_svd(self, mi, mat, temponly=False):
+    def project_matrix_sky_to_svd(self, mi, mat, temponly=False,  pc=None, min_dist=1):
         """Project a covariance matrix from the sky into the SVD basis.
 
         Parameters
@@ -1215,25 +1216,130 @@ class BeamTransfer(object):
 
         # Number of significant sv modes at each frequency, and the array bounds
         svnum, svbounds = self._svd_num(mi)
+        nside = svbounds[-1] # ndof(mi)
+        gfreqs = self._svd_freq_iter(mi) # global frequency index list
+        gflen = len(gfreqs)
 
-        # Create the output matrix
-        matf = np.zeros((svbounds[-1], svbounds[-1]), dtype=np.complex128)
+        comm = None if pc is None else pc.mpi_comm
+        grid_shape = [1, 1] if comm is None else pc.grid_shape
+        size = 1 if comm is None else comm.size
+        rank = 0 if comm is None else comm.rank # local process rank in comm
+        assert size == np.prod(grid_shape), 'Invalid grid_shape'
+        grid_pos = (rank / grid_shape[1], rank % grid_shape[1]) # local process position in the process grid
 
+        nr, sr, er = mpiutil.split_m(gflen, grid_shape[0])[:, grid_pos[0]] # local row
+        nc, sc, ec = mpiutil.split_m(gflen, grid_shape[1])[:, grid_pos[1]] # local column
+        lrfreqs = gfreqs[sr:er] # local row frequency list
+        lcfreqs = gfreqs[sc:ec] # local column frequency list
+
+        lrsvnum = [svnum[lfi] for lfi in lrfreqs]
+        gr_idx = svbounds[lrfreqs[0]] # start row index in the global matrix corresponding to the local section
+        lrnum = np.sum(lrsvnum) # local number of rows of out matrix
+        lrbounds = np.cumsum(np.insert(lrsvnum, 0, 0)) # local row bounds
+        lcsvnum = [svnum[lfi] for lfi in lcfreqs]
+        gc_idx = svbounds[lcfreqs[0]] # start column index in the global matrix corresponding to the local section
+        lcnum = np.sum(lcsvnum) # local number of columes of out matrix
+        lcbounds = np.cumsum(np.insert(lcsvnum, 0, 0)) # local column bounds
+
+        # Create the local section of the output matrix
+        matf = np.zeros((lrnum, lcnum), dtype=np.complex128, order='C')
+
+        # each process computes a section of the global matrix
         # Should it be a +=?
         for pi in range(npol):
             for pj in range(npol):
-                for fi in self._svd_freq_iter(mi):
+                # for fi in self._svd_freq_iter(mi):
+                for (i, fi) in enumerate(lrfreqs):
 
                     fibeam = beam[fi, :svnum[fi], pi, :] # Beam for this pol, freq, and svcut (i)
 
-                    for fj in self._svd_freq_iter(mi):
+                    # for fj in self._svd_freq_iter(mi):
+                    for (j, fj) in enumerate(lcfreqs):
                         fjbeam = beam[fj, :svnum[fj], pj, :] # Beam for this pol, freq, and svcut (j)
                         # lmat = mat[pi, pj, mi:, fi, fj] # Local section of the sky matrix (i.e C_l part)
                         lmat = mat[pi, pj, :, fi, fj] # Local section of the sky matrix (i.e C_l part)
 
-                        matf[svbounds[fi]:svbounds[fi+1], svbounds[fj]:svbounds[fj+1]] += np.dot(fibeam * lmat, fjbeam.T.conj())
+                        # matf[svbounds[fi]:svbounds[fi+1], svbounds[fj]:svbounds[fj+1]] += np.dot(fibeam * lmat, fjbeam.T.conj())
+                        matf[lrbounds[i]:lrbounds[i+1], lcbounds[j]:lcbounds[j+1]] += np.dot(fibeam * lmat, fjbeam.T.conj())
 
-        return matf
+        # matf = np.asfortranarray(matf)
+        # if rank == 1:
+        #     print matf
+
+        if comm is None:
+            return matf, False
+            # matf.tofile(filename)
+            # matf = None
+        else:
+            gsizes = (nside, nside)
+            lsize = (lrnum, lcnum)
+            start = (gr_idx, gc_idx)
+            lsizes = comm.allgather(lsize)
+            starts = comm.allgather(start)
+
+            # for global array less than (min_dist, min_dist), collect all local sections to a global matrix in rank 0
+            if nside < min_dist:
+                mpi_dtype = mpiutil.typemap(matf.dtype)
+                if comm.rank == 0:
+                    # create global matrix and subarray datatype view of the global matrix
+                    gmatf = np.empty(gsizes, dtype=matf.dtype)
+                    subtypes = [mpi_dtype.Create_subarray(gsizes, lsizes[i], starts[i], order=mpiutil.ORDER_C).Commit() for i in range(comm.size)] # default order=ORDER_C
+                else:
+                    gmatf = None
+
+                # Each process should send its local sections.
+                sreq = comm.Isend([matf, mpi_dtype], dest=0, tag=0)
+
+                if comm.rank == 0:
+                    # Post each receive
+                    reqs = [ comm.Irecv([gmatf, subtypes[sr]], source=sr, tag=0) for sr in range(comm.size) ]
+
+                    # Wait for requests to complete
+                    mpiutil.Prequest.Waitall(reqs)
+
+                sreq.Wait()
+
+                # gmatf = comm.bcast(gmatf, root=0)
+                # assert np.allclose(matf, gmatf[start[0]:start[0]+lsize[0], start[1]:start[1]+lsize[1]])
+                # if rank == 0:
+                #     print gmatf
+                return gmatf, False
+
+            # # for global array larger than (min_dist, min_dist), create an distributed matrix
+            else:
+                blk_size = (nside - 1) / comm.size + 1
+                blk_shape = (blk_size, blk_size)
+                # pc = core.ProcessContext(grid_shape, comm=comm) # process context
+                matf = np.asfortranarray(matf)
+                gmatf = core.DistributedMatrix([nside, nside], dtype=np.complex128, block_shape=blk_shape, context=pc)
+                # copy the local matrix to the corresponding section of the distributed matrix
+                for i in range(comm.size):
+                    gmatf = gmatf.np2self(matf, starts[i][0], starts[i][1], rank=i)
+
+
+                # lmatf = gmatf.to_global_array()
+                # gmatf = core.DistributedMatrix.from_global_array(lmatf, rank=0, block_shape=[blk_size, blk_size], context=pc)
+
+                return gmatf, True
+
+
+        #     # Open the file, and parallel write out the local segments
+        #     f = MPI.File.Open(comm, filename, mpiutil.MODE_RDONLY | mpiutil.MODE_CREATE)
+
+        #     # filelength = displacement + mpi3util.type_get_extent(self._darr_f)[1]  # Extent is index 1
+
+        #     # # Preallocate to ensure file is long enough for writing.
+        #     # f.Preallocate(filelength)
+
+        #     # Set view and write out.
+        #     f.Set_view(0, mpi_dtype, subtype, "native")
+        #     f.Write_all(matf)
+        #     f.Close()
+
+        #     matf = None
+
+
+        # return matf
 
 
     def project_matrix_diagonal_telescope_to_svd(self, mi, dmat):

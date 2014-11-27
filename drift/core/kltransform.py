@@ -322,8 +322,8 @@ class KLTransform(config.Reader):
             Signal and noice covariance matrices.
         """
 
-        rank0 = True if comm is None or comm.Get_rank() == 0 else False
-        rank1 = True if comm is None or comm.Get_rank() == 1 else False
+        # rank0 = True if comm is None or comm.Get_rank() == 0 else False
+        # rank1 = True if comm is None or comm.Get_rank() == 1 else False
         if not (self.use_foregrounds or self.use_thermal):
             raise Exception("Either `use_thermal` or `use_foregrounds`, or both must be True.")
 
@@ -333,25 +333,35 @@ class KLTransform(config.Reader):
         # comm.Barrier()
         # core.initmpi([2, 2], block_shape=[10, 10], comm=comm)
 
-        nside = self.beamtransfer.ndof(mi)
-        comm_size = 1 if comm is None else comm.Get_size()
-        # blk_size = (nside - 1) / comm_size + 1
 
-
-        dist = False # use distribute computation if True
-        cvb_s = None
-        cvb_n = None
+        # comm_size = 1 if comm is None else comm.Get_size()
+        rank0 = True if comm is None or comm.Get_rank() == 0 else False
+        pc = core.ProcessContext(self.grid_shape, comm=comm) if comm is not None else None # process context
+        # nside = self.beamtransfer.ndof(mi)
+        # if comm is not None and nside >= self.min_dist:
+        #     # dist = True # use distribute computation if True
+        #     # # get block size according to nside
+        #     # blk_size = (nside - 1) / comm_size + 1
+        #     pc = core.ProcessContext(self.grid_shape, comm=comm) # process context
+        # else:
+        #     # dist = False # use distribute computation if True
+        #     # blk_size = 0
+        #     pc = None
+        # cvb_s = None
+        # cvb_n = None
 
         # comm.Barrier()
 
         if rank0:
+            # print 'nside = %d' % nside
             print 'Start signal covariance projection for m = %d...' % mi
-            cvb_s = self.beamtransfer.project_matrix_sky_to_svd(mi, self.cvsg_m(mi))
+        cvb_s, dist = self.beamtransfer.project_matrix_sky_to_svd(mi, self.cvsg_m(mi), pc=pc, min_dist=self.min_dist)
+        if rank0:
             print 'Signal covariance projection for m = %d done.' % mi
-            sys.stdout.flush()
-            if comm is not None and nside >= self.min_dist:
-                cvb_s = np.asfortranarray(cvb_s)
-                dist = True
+            # sys.stdout.flush()
+            # if comm is not None and nside >= self.min_dist:
+            #     cvb_s = np.asfortranarray(cvb_s)
+            #     dist = True
             #     comm.bcast(dist, root=0)
             # else:
             #     comm.Bcast(cvb_s, root=0)
@@ -359,12 +369,18 @@ class KLTransform(config.Reader):
             # print 'cvb_s.shape = ', cvb_s.shape
         # selected_rank = 1 if comm_size >=2 else 0
         # if comm is None or comm.Get_rank() == selected_rank:
-        if rank1:
+        # if rank1:
             print 'Start foreground covariance projection for m = %d...' % mi
-            if self.use_foregrounds:
-                cvb_n = self.beamtransfer.project_matrix_sky_to_svd(mi, self.cvfg_m(mi))
+            sys.stdout.flush()
+
+        if self.use_foregrounds:
+            cvb_n, dist = self.beamtransfer.project_matrix_sky_to_svd(mi, self.cvfg_m(mi), pc=pc, min_dist=self.min_dist)
+        else:
+            if dist:
+                cvb_n = cvb_s.empty_like()
             else:
-                cvb_n = np.zeros_like(cvb_s)
+                cvb_n = np.zeros_like(cvb_s) if cvb_s is not None else None
+        if rank0:
             print 'Foreground covariance projection for m = %d done.' % mi
             sys.stdout.flush()
 
@@ -388,56 +404,72 @@ class KLTransform(config.Reader):
 
             # as we have pre-whitened the visibility in SVD projection, the projected instrumental noise has the identity covariance
             # so self.beamtransfer.project_matrix_diagonal_telescope_to_svd(mi, nc*N) = nc * Nbar = nc * I
-            cvb_n[np.diag_indices_from(cvb_n)] += nc
+            if dist == False:
+                cvb_n[np.diag_indices_from(cvb_n)] += nc
+        else:
+            nc = 0.0
 
-            if comm is not None and nside >= self.min_dist:
-                cvb_n = np.asfortranarray(cvb_n)
-                dist = True
-            #     comm.bcast(dist, root=selected_rank)
-            # else:
-            #     comm.Bcast(cvb_n, root=selected_rank)
-            # cvb_n = np.asfortranarray(cvb_n)
-            # assert np.allclose(cvb_n, cvb_n.T.conj())
-            # print 'cvb_n.shape = ', cvb_n.shape
+        if dist:
+            nc = comm.bcast(nc, root=0)
+
+            # print 'Process %d has nc = %f' % (comm.rank, nc)
+
+            (g,r,c) = cvb_n.local_diagonal_indices()
+            cvb_n.local_array[r,c] += nc
 
         if comm is not None:
             comm.Barrier()
-            dist = comm.bcast(dist, root=0)
 
-        # print 'Process %d dist = ' % comm.Get_rank(), dist
+        return cvb_s, cvb_n, dist
 
-        if dist == True:
-            # get block size according to nside
-            blk_size = (nside - 1) / comm_size + 1
-            pc = core.ProcessContext(self.grid_shape, comm=comm) # process context
-            # overwrite the original matrices to reduce memory usage
-            if rank0:
-                print 'Start to distribute for m = %d...' % mi
-            cvb_s = core.DistributedMatrix.from_global_array(cvb_s, rank=0, block_shape=[blk_size, blk_size], context=pc)
-            cvb_n = core.DistributedMatrix.from_global_array(cvb_n, rank=1, block_shape=[blk_size, blk_size], context=pc)
-            comm.Barrier()
-            if rank0:
-                print 'Distribute for m = %d Done.' % mi
-                sys.stdout.flush()
-            return cvb_s, cvb_n, True
-        else:
-            # nside = self.beamtransfer.ndof(mi)
-            if cvb_s is None:
-                cvb_s = np.empty((nside, nside), dtype=np.complex128)
-            if cvb_n is None:
-                cvb_n = np.empty((nside, nside), dtype=np.complex128)
-            # comm.Bcast([cvb_s, mpiutil.typemap(cvb_s.dtype)], [cvb_s, mpiutil.typemap(cvb_s.dtype)], root=0) # more effective to use Bcast
-            # comm.Bcast([cvb_n, mpiutil.typemap(cvb_n.dtype)], [cvb_n, mpiutil.typemap(cvb_n.dtype)], root=selected_rank)
-            if comm is not None:
-                comm.Bcast(cvb_s, root=0) # more effective to use Bcast
-                comm.Bcast(cvb_n, root=1)
-                comm.Barrier()
-            return cvb_s, cvb_n, False
+        #     if comm is not None and nside >= self.min_dist:
+        #         cvb_n = np.asfortranarray(cvb_n)
+        #         dist = True
+        #     #     comm.bcast(dist, root=selected_rank)
+        #     # else:
+        #     #     comm.Bcast(cvb_n, root=selected_rank)
+        #     # cvb_n = np.asfortranarray(cvb_n)
+        #     # assert np.allclose(cvb_n, cvb_n.T.conj())
+        #     # print 'cvb_n.shape = ', cvb_n.shape
 
-        # if comm.Get_rank() == 0:
-        #     print 'Return projected distribute covariance matrices for m = %d.' % mi
-        # # return cvb_s, cvb_n
-        # return dcvb_s, dcvb_n
+        # if comm is not None:
+        #     comm.Barrier()
+        #     dist = comm.bcast(dist, root=0)
+
+        # # print 'Process %d dist = ' % comm.Get_rank(), dist
+
+        # if dist == True:
+        #     # get block size according to nside
+        #     blk_size = (nside - 1) / comm_size + 1
+        #     pc = core.ProcessContext(self.grid_shape, comm=comm) # process context
+        #     # overwrite the original matrices to reduce memory usage
+        #     if rank0:
+        #         print 'Start to distribute for m = %d...' % mi
+        #     cvb_s = core.DistributedMatrix.from_global_array(cvb_s, rank=0, block_shape=[blk_size, blk_size], context=pc)
+        #     cvb_n = core.DistributedMatrix.from_global_array(cvb_n, rank=1, block_shape=[blk_size, blk_size], context=pc)
+        #     comm.Barrier()
+        #     if rank0:
+        #         print 'Distribute for m = %d Done.' % mi
+        #         sys.stdout.flush()
+        #     return cvb_s, cvb_n, True
+        # else:
+        #     # nside = self.beamtransfer.ndof(mi)
+        #     if cvb_s is None:
+        #         cvb_s = np.empty((nside, nside), dtype=np.complex128)
+        #     if cvb_n is None:
+        #         cvb_n = np.empty((nside, nside), dtype=np.complex128)
+        #     # comm.Bcast([cvb_s, mpiutil.typemap(cvb_s.dtype)], [cvb_s, mpiutil.typemap(cvb_s.dtype)], root=0) # more effective to use Bcast
+        #     # comm.Bcast([cvb_n, mpiutil.typemap(cvb_n.dtype)], [cvb_n, mpiutil.typemap(cvb_n.dtype)], root=selected_rank)
+        #     if comm is not None:
+        #         comm.Bcast(cvb_s, root=0) # more effective to use Bcast
+        #         comm.Bcast(cvb_n, root=1)
+        #         comm.Barrier()
+        #     return cvb_s, cvb_n, False
+
+        # # if comm.Get_rank() == 0:
+        # #     print 'Return projected distribute covariance matrices for m = %d.' % mi
+        # # # return cvb_s, cvb_n
+        # # return dcvb_s, dcvb_n
 
 
     def _transform_m(self, mi, comm=None):
@@ -459,14 +491,16 @@ class KLTransform(config.Reader):
         if rank0:
              print "Solving for Eigenvalues...."
 
-        # Fetch the covariance matrices to diagonalise
-        st = time.time()
         nside = self.beamtransfer.ndof(mi)
+        if rank0:
+            print 'nside = ', nside
 
         # Ensure that number of SVD degrees of freedom is non-zero before proceeding
         if nside == 0:
             return np.array([]), np.array([[]]), np.array([[]]), { 'ac' : 0.0 }
 
+        # Fetch the covariance matrices to diagonalise
+        st = time.time()
         # cvb_sr, cvb_nr = [cv.reshape(nside, nside) for cv in self.sn_covariance(mi)]
         cvb_sr, cvb_nr, dist = self.sn_covariance(mi, comm)
         et = time.time()
@@ -479,13 +513,18 @@ class KLTransform(config.Reader):
             # evals, evecs = su.eigh_gen(cvb_sr, cvb_nr)
             # evecs = evecs.to_global_array() # no need Hermitian transpose
             evals, evecs = rt.eigh(cvb_sr, cvb_nr)
-            evecs = evecs.to_global_array(rank=0)
-            evecs = evecs.T.conj() if evecs is not None else None
+            evecs = evecs.H # Hermitian conjugate of the distributed matrix
+            # evecs = evecs.to_global_array(rank=0)
+            # evecs = evecs.T.conj() if evecs is not None else None
             ac = 0.0
         else:
             # print 'Process %d: ' % comm.Get_rank(), cvb_sr, cvb_nr
-            evals, evecs, ac = eigh_gen(cvb_sr, cvb_nr)
-            evecs = evecs.T.conj() # need Hermitian transpose
+            if rank0:
+                evals, evecs, ac = eigh_gen(cvb_sr, cvb_nr)
+                evecs = evecs.T.conj() # need Hermitian transpose
+            else:
+                evals, evecs, ac = None, None, 0.0
+
         et=time.time()
         if rank0:
             print "Time =", (et-st)
@@ -498,7 +537,13 @@ class KLTransform(config.Reader):
         # Generate inverse if required
         inv = None
         if self.inverse:
-            inv = inv_gen(evecs).T if evecs is not None else None
+            if dist:
+                inv = rt.pinv2(evecs, overwrite_a=False).T # NOTE: must overwrite_a = False
+                # due to bugs in f2py, here convert to numpy array
+                inv = inv.to_global_array(rank=0)
+                evecs = evecs.to_global_array(rank=0)
+            else:
+                inv = inv_gen(evecs).T if evecs is not None else None
 
         # Construct dictionary of extra parameters to return
         evextra = {'ac' : ac}
@@ -506,6 +551,7 @@ class KLTransform(config.Reader):
         if comm is not None:
             comm.Barrier()
 
+        # if dist == True, the returned evecs and inv are distributed matrix
         return evals, evecs, inv, evextra
 
 
@@ -535,30 +581,33 @@ class KLTransform(config.Reader):
             print "Constructing signal and noise covariances for m = %d ..." % mi
         evals, evecs, inv, evextra = self._transform_m(mi, comm)
 
-        ## Write out Eigenvals and Vectors
-
-        # Create file and set some metadata
         if rank0:
+            ## If modes have been already truncated (e.g. DoubleKL) then pad out
+            ## with zeros at the lower end.
+            nside = self.beamtransfer.ndof(mi)
+            evalsf = np.zeros(nside, dtype=np.float64)
+            if evals.size != 0:
+                evalsf[(-evals.size):] = evals
+            # Discard eigenmodes with S/N below threshold if requested.
+            if self.subset:
+                i_ev = np.searchsorted(evals, self.threshold)
+
+                evals = evals[i_ev:]
+                evecs = evecs[i_ev:]
+                print "Modes with S/N > %f: %i of %i" % (self.threshold, evals.size, evalsf.size)
+            if self.inverse:
+                if self.subset:
+                    inv = inv[i_ev:]
+
+            ## Write out Eigenvals and Vectors
+
+            # Create file and set some metadata
             print "Creating file %s ...." % (self._evfile(mi))
             with h5py.File(self._evfile(mi), 'w') as f:
                 f.attrs['m'] = mi
                 f.attrs['SUBSET'] = self.subset
 
-                ## If modes have been already truncated (e.g. DoubleKL) then pad out
-                ## with zeros at the lower end.
-                nside = self.beamtransfer.ndof(mi)
-                evalsf = np.zeros(nside, dtype=np.float64)
-                if evals.size != 0:
-                    evalsf[(-evals.size):] = evals
                 f.create_dataset('evals_full', data=evalsf, compression='lzf')
-
-                # Discard eigenmodes with S/N below threshold if requested.
-                if self.subset:
-                    i_ev = np.searchsorted(evals, self.threshold)
-
-                    evals = evals[i_ev:]
-                    evecs = evecs[i_ev:]
-                    print "Modes with S/N > %f: %i of %i" % (self.threshold, evals.size, evalsf.size)
 
                 # Write out potentially reduced eigen spectrum.
                 f.create_dataset('evals', data=evals, compression='lzf')
@@ -566,9 +615,6 @@ class KLTransform(config.Reader):
                 f.attrs['num_modes'] = evals.size
 
                 if self.inverse:
-                    if self.subset:
-                        inv = inv[i_ev:]
-
                     f.create_dataset('evinv', data=inv, compression='lzf')
 
                 # Call hook which allows derived classes to save special information

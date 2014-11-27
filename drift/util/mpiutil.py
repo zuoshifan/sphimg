@@ -11,6 +11,12 @@ rank0 = True
 
 IN_PLACE = None
 DOUBLE = None
+ORDER_C = None
+ORDER_F = None
+MODE_CREATE = None
+MODE_WRONLY = None
+
+Prequest = None
 
 ## Try to setup MPI and get the comm, rank and size.
 ## If not they should end up as rank=0, size=1.
@@ -25,6 +31,12 @@ try:
 
     IN_PLACE = MPI.IN_PLACE
     DOUBLE = MPI.DOUBLE
+    ORDER_C = MPI.ORDER_C
+    ORDER_F = MPI.ORDER_F
+    MODE_CREATE = MPI.MODE_CREATE
+    MODE_WRONLY = MPI.MODE_WRONLY
+
+    Prequest = MPI.Prequest
 
     if rank:
         print "MPI process %i of %i." % (rank, size)
