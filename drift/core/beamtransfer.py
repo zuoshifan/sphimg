@@ -1268,14 +1268,8 @@ class BeamTransfer(object):
                         # matf[svbounds[fi]:svbounds[fi+1], svbounds[fj]:svbounds[fj+1]] += np.dot(fibeam * lmat, fjbeam.T.conj())
                         matf[lrbounds[i]:lrbounds[i+1], lcbounds[j]:lcbounds[j+1]] += np.dot(fibeam * lmat, fjbeam.T.conj())
 
-        # matf = np.asfortranarray(matf)
-        # if rank == 1:
-        #     print matf
-
         if comm is None:
             return matf, False
-            # matf.tofile(filename)
-            # matf = None
         else:
             gsizes = (nside, nside)
             lsize = (lrnum, lcnum)
@@ -1305,47 +1299,19 @@ class BeamTransfer(object):
 
                 sreq.Wait()
 
-                # gmatf = comm.bcast(gmatf, root=0)
-                # assert np.allclose(matf, gmatf[start[0]:start[0]+lsize[0], start[1]:start[1]+lsize[1]])
-                # if rank == 0:
-                #     print gmatf
                 return gmatf, False
 
             # # for global array larger than (min_dist, min_dist), create an distributed matrix
             else:
                 blk_size = (nside - 1) / comm.size + 1
                 blk_shape = (blk_size, blk_size)
-                # pc = core.ProcessContext(grid_shape, comm=comm) # process context
                 matf = np.asfortranarray(matf)
                 gmatf = core.DistributedMatrix([nside, nside], dtype=np.complex128, block_shape=blk_shape, context=pc)
                 # copy the local matrix to the corresponding section of the distributed matrix
                 for i in range(comm.size):
                     gmatf = gmatf.np2self(matf, starts[i][0], starts[i][1], rank=i)
 
-
-                # lmatf = gmatf.to_global_array()
-                # gmatf = core.DistributedMatrix.from_global_array(lmatf, rank=0, block_shape=[blk_size, blk_size], context=pc)
-
                 return gmatf, True
-
-
-        #     # Open the file, and parallel write out the local segments
-        #     f = MPI.File.Open(comm, filename, mpiutil.MODE_RDONLY | mpiutil.MODE_CREATE)
-
-        #     # filelength = displacement + mpi3util.type_get_extent(self._darr_f)[1]  # Extent is index 1
-
-        #     # # Preallocate to ensure file is long enough for writing.
-        #     # f.Preallocate(filelength)
-
-        #     # Set view and write out.
-        #     f.Set_view(0, mpi_dtype, subtype, "native")
-        #     f.Write_all(matf)
-        #     f.Close()
-
-        #     matf = None
-
-
-        # return matf
 
 
     def project_matrix_diagonal_telescope_to_svd(self, mi, dmat):
