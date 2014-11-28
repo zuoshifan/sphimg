@@ -349,30 +349,31 @@ class Timestream(object):
         n_mis, s_mis, e_mis = mpiutil.split_all(nmodes)
         n, s, e = mpiutil.split_local(nmodes)
 
-        lside = self.telescope.lmax + 1
-        nfreq = self.telescope.nfreq
-        npol = self.telescope.num_pol_sky
-        gsize = (lside, nfreq, npol, lside) # global alm shape
-        lsize = (n, nfreq, npol, lside) # local alm shape
-        dtype = np.complex128
-        lalm = np.empty(lsize, dtype=dtype) # local alm section
+        ##################################################
+        # lside = self.telescope.lmax + 1
+        # nfreq = self.telescope.nfreq
+        # npol = self.telescope.num_pol_sky
+        # gsize = (lside, nfreq, npol, lside) # global alm shape
+        # lsize = (n, nfreq, npol, lside) # local alm shape
+        # dtype = np.complex128
+        # lalm = np.empty(lsize, dtype=dtype) # local alm section
 
-        for mi in range(s, e):
-            lalm[mi - s] = func(mi)
+        # for mi in range(s, e):
+        #     lalm[mi - s] = func(mi)
 
-        if mpiutil.rank0:
-            # usally lside > nmodes, so alm = 0 for those lside > nmodes section
-            alm = np.zeros(gsize, dtype=dtype)
-        else:
-            alm = None
+        # if mpiutil.rank0:
+        #     # usally lside > nmodes, so alm = 0 for those lside > nmodes section
+        #     alm = np.zeros(gsize, dtype=dtype)
+        # else:
+        #     alm = None
 
-        sizes = n_mis * (nfreq * npol * lside)
-        displ = s_mis * (nfreq * npol * lside)
-        mpiutil.Gatherv(lalm, [alm, sizes, displ, mpiutil.typemap(dtype)], root=0)
+        # sizes = n_mis * (nfreq * npol * lside)
+        # displ = s_mis * (nfreq * npol * lside)
+        # mpiutil.Gatherv(lalm, [alm, sizes, displ, mpiutil.typemap(dtype)], root=0)
 
-        alm = alm.transpose((1, 2, 3, 0)) if alm is not None else None
+        # alm = alm.transpose((1, 2, 3, 0)) if alm is not None else None
 
-        return alm
+        # return alm
 
         ##################################################
         # alm = np.zeros((self.telescope.lmax + 1, self.telescope.nfreq, self.telescope.num_pol_sky,
@@ -390,44 +391,52 @@ class Timestream(object):
         # return alm.transpose((1, 2, 3, 0))
 
         # #################################################
-        # lside = self.telescope.lmax + 1
-        # nfreq = self.telescope.nfreq
-        # npol = self.telescope.num_pol_sky
-        # sizes = (nfreq, npol, lside, lside)
-        # subsizes = (nfreq, npol, lside, n)
-        # lalm = np.empty(subsizes, dtype=np.complex128) # local alm section
+        lside = self.telescope.lmax + 1
+        nfreq = self.telescope.nfreq
+        npol = self.telescope.num_pol_sky
+        gsizes = (nfreq, npol, lside, lside)
+        lsize = (nfreq, npol, lside, n)
+        start = (0, 0, 0, s)
+        lalm = np.empty(lsize, dtype=np.complex128) # local alm section
 
-        # for mi in range(s, e):
-        #     lalm[..., mi - s] = func(mi)
+        for mi in range(s, e):
+            lalm[..., mi - s] = func(mi)
 
-        # if mpiutil.rank0:
-        #     # usally lside > nmodes, so alm = 0 for those lside > nmodes section
-        #     alm = np.zeros(sizes, dtype=np.complex128)
-        # else:
-        #     alm = None
+        if mpiutil.rank0:
+            # usally lside > nmodes, so alm = 0 for those lside > nmodes section
+            alm = np.zeros(gsizes, dtype=np.complex128)
+        else:
+            alm = None
 
-        # comm = mpiutil.world
-        # mpi_complex = mpiutil.typemap(np.complex128)
-        # # create newtype corresponding to the local alm section in the full alm array
-        # subalm = mpi_complex.Create_subarray(sizes, subsizes, (0, 0, 0, s)).Commit() # default order=ORDER_C
+        comm = mpiutil.world
+        if comm is None:
+            alm[..., :n] = lalm
+            return alm
 
-        # # Each process should send its local sections.
-        # sreq = comm.Isend([lalm, mpi_complex], dest=0, tag=0)
+        lsizes = comm.gather(lsize, root=0)
+        starts = comm.gather(start, root=0)
+        mpi_complex = mpiutil.typemap(np.complex128)
+        if mpiutil.rank0:
+            # create newtype corresponding to the local alm section in the full alm array
+            subalm = [mpi_complex.Create_subarray(gsizes, lsizes[i], starts[i]).Commit() for i in range(comm.size)] # default order=ORDER_C
 
-        # if mpiutil.rank0:
-        #     # Post each receive
-        #     reqs = [ comm.Irecv([alm, subalm], source=sr, tag=0) for sr in range(comm.size) ]
+        # Each process should send its local sections.
+        sreq = comm.Isend([lalm, mpi_complex], dest=0, tag=0)
 
-        #     # Wait for requests to complete
-        #     mpiutil.Prequest.Waitall(reqs)
+        if mpiutil.rank0:
+            # Post each receive
+            reqs = [ comm.Irecv([alm, subalm[sr]], source=sr, tag=0) for sr in range(comm.size) ]
 
-        # # Wait on send request. Important, as can get weird synchronisation
-        # # bugs otherwise as processes exit before completing their send.
-        # sreq.Wait()
+            # Wait for requests to complete
+            mpiutil.Prequest.Waitall(reqs)
 
-        # # mpiutil.barrier()
+        # Wait on send request. Important, as can get weird synchronisation
+        # bugs otherwise as processes exit before completing their send.
+        sreq.Wait()
 
-        # return alm
+        # mpiutil.barrier()
+
+        return alm
 
 
 
