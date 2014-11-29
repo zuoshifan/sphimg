@@ -71,6 +71,24 @@ class DoubleKL(kltransform.KLTransform):
         else:
             evextra = None
 
+        # Get the indices that extract the high S/F ratio modes
+        if rank0:
+            ind = np.searchsorted(evals, self.foreground_threshold)
+        else:
+            ind = 0
+        if comm is not None:
+            ind = comm.bcast(ind, root=0)
+        if rank0:
+            print "Modes with S/F > %f: %i of %i" % (self.foreground_threshold, nside-ind, nside)
+
+        # if no evals greater than foreground_threshold, directly return, no need to do inverse and other computations
+        if ind == nside:
+            if comm is not None:
+                comm.Barrier()
+            return np.array([]), np.array([]).reshape(0, nside), np.array([]).reshape(0, nside), evextra
+
+
+        # else one or more evals greater than foreground_threshold
         if rank0:
             print 'Start inverse calculation for m = %d...' % mi
         # Construct inverse transformation if required
@@ -78,16 +96,12 @@ class DoubleKL(kltransform.KLTransform):
         if self.inverse:
             if dist:
                 inv = rt.pinv(evecs, overwrite_a=False).T # NOTE: must overwrite_a = False
-                # due to bugs in f2py, here convert to numpy array
-                # inv = inv.to_global_array(rank=0)
-                # evecs = evecs.to_global_array(rank=0)
             else:
                 inv = kltransform.inv_gen(evecs).T if evecs is not None else None
         if rank0:
             print 'Inverse calculation for m = %d done.' % mi
 
         if dist:
-            ind = np.searchsorted(evals, self.foreground_threshold)
             # copy to numpy array
             evals = evals[ind:]
             dtype = evecs.dtype
@@ -102,15 +116,10 @@ class DoubleKL(kltransform.KLTransform):
                     inv = np.array([], dtype=dtype).reshape(0, nside)
         else:
             if rank0:
-                # Get the indices that extract the high S/F ratio modes
-                ind = np.where(evals > self.foreground_threshold)
                 # Construct the foreground removed subset of the space
-                evals = evals[ind]
-                evecs = evecs[ind]
-                inv = inv[ind] if self.inverse else None
-
-        if rank0:
-            print "Modes with S/F > %f: %i of %i" % (self.foreground_threshold, evals.size, nside)
+                evals = evals[ind:]
+                evecs = evecs[ind:]
+                inv = inv[ind:] if self.inverse else None
 
         if rank0 and evals.size > 0:
             # Generate the full S and N covariances in the truncated basis
