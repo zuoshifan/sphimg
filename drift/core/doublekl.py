@@ -71,16 +71,20 @@ class DoubleKL(kltransform.KLTransform):
         else:
             evextra = None
 
+        if rank0:
+            print 'Start inverse calculation for m = %d...' % mi
         # Construct inverse transformation if required
         inv = None
         if self.inverse:
             if dist:
-                inv = rt.pinv2(evecs, overwrite_a=False).T # NOTE: must overwrite_a = False
+                inv = rt.pinv(evecs, overwrite_a=False).T # NOTE: must overwrite_a = False
                 # due to bugs in f2py, here convert to numpy array
                 # inv = inv.to_global_array(rank=0)
                 # evecs = evecs.to_global_array(rank=0)
             else:
                 inv = kltransform.inv_gen(evecs).T if evecs is not None else None
+        if rank0:
+            print 'Inverse calculation for m = %d done.' % mi
 
         if dist:
             ind = np.searchsorted(evals, self.foreground_threshold)

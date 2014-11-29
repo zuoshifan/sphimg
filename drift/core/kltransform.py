@@ -428,7 +428,7 @@ class KLTransform(config.Reader):
         inv = None
         if self.inverse:
             if dist:
-                inv = rt.pinv2(evecs, overwrite_a=False).T # NOTE: must overwrite_a = False
+                inv = rt.pinv(evecs, overwrite_a=False).T # NOTE: must overwrite_a = False
                 # due to bugs in f2py, here convert to numpy array
                 inv = inv.to_global_array(rank=0)
                 evecs = evecs.to_global_array(rank=0)
