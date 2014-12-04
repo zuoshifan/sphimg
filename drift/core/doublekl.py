@@ -52,9 +52,10 @@ class DoubleKL(kltransform.KLTransform):
         if dist:
             # evals, evecs = su.eigh_gen(cs, cn)
             # evecs = evecs.to_global_array() # no need Hermitian transpose
-            evals, evecs = rt.eigh(cs, cn)
+            # evals, evecs = rt.eigh(cs, cn)
+            evals, evecs, ac = kltransform.dist_eigh_gen(cs, cn)
             evecs = evecs.H # Hermitian conjugate of the distributed matrix
-            ac = 0.0
+            # ac = 0.0
         else:
             if rank0:
                 evals, evecs, ac = kltransform.eigh_gen(cs, cn)

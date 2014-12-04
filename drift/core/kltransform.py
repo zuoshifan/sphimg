@@ -137,6 +137,68 @@ def eigh_gen(A, B):
     return evals, evecs, add_const
 
 
+def dist_eigh_gen(A, B):
+    """Solve the generalised eigenvalue problem for distributed matrices. :math:`\mathbf{A} \mathbf{v} =
+    \lambda \mathbf{B} \mathbf{v}`
+
+    This routine will attempt to correct for when `B` is not positive definite
+    (usually due to numerical precision), by adding a constant diagonal to make
+    all of its eigenvalues positive.
+
+    Parameters
+    ----------
+    A, B : DistributedMatrix
+        Matrices to operate on.
+
+    Returns
+    -------
+    evals : np.ndarray
+        Eigenvalues of the problem.
+    evecs : DistributedMatrix
+        2D array of eigenvectors (packed column by column).
+    add_const : scalar
+        The constant added on the diagonal to regularise.
+    """
+    add_const = 0.0
+
+    try:
+        # evals, evecs = rt.eigh(A, B, overwrite_a=True, overwrite_b=True)
+        evals, evecs = rt.eigh(A, B, overwrite_a=False, overwrite_b=False) # can not overwrite A/B if you want to do the following exception handle
+    except core.ScalapackException as e:
+        if B.context.mpi_comm.rank == 0:
+            print "Error occured in distributed eigenvalue solve."
+        # Get error number
+        mo = re.search('order (\\d+)', e.message)
+
+        # If exception unrecognised then re-raise.
+        if mo is None:
+            raise e
+
+        errno = int(mo.group(1)) # return value of mo.group(1) is str
+
+        if errno < (A.global_shape[0]+1):
+
+            if B.context.mpi_comm.rank == 0:
+                print "Distributed matrix `B` probably not positive definite due to numerical issues. \
+                Trying to add a constant diagonal...."
+
+            # evb = la.eigvalsh(B)
+            evb, evecsb = rt.eigh(B, overwrite_a=False)
+            add_const = 1e-15 * evb[-1] - 2.0 * evb[0] + 1e-60
+
+            # B[np.diag_indices(B.shape[0])] += add_const
+            (g,r,c) =B.local_diagonal_indices()
+            B.local_array[r,c] += add_const
+            evals, evecs = rt.eigh(A, B, overwrite_a=True, overwrite_b=True)
+
+        else:
+            # print "Strange convergence issue. Trying non divide and conquer routine."
+            # evals, evecs = la.eigh(A, B, overwrite_a=True, overwrite_b=True, turbo=False)
+            raise Exception('Strange convergence issue.')
+
+    return evals, evecs, add_const
+
+
 def inv_gen(A):
     """Find the inverse of A.
 
@@ -410,9 +472,10 @@ class KLTransform(config.Reader):
         if dist:
             # evals, evecs = su.eigh_gen(cvb_sr, cvb_nr)
             # evecs = evecs.to_global_array() # no need Hermitian transpose
-            evals, evecs = rt.eigh(cvb_sr, cvb_nr)
+            # evals, evecs = rt.eigh(cvb_sr, cvb_nr)
+            evals, evecs, ac = dist_eigh_gen(cvb_sr, cvb_nr)
             evecs = evecs.H # Hermitian conjugate of the distributed matrix
-            ac = 0.0
+            # ac = 0.0
         else:
             if rank0:
                 evals, evecs, ac = eigh_gen(cvb_sr, cvb_nr)
