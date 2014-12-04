@@ -117,7 +117,7 @@ def eigh_gen(A, B):
             if mo is None:
                 raise e
 
-            errno = mo.group(1)
+            errno = int(mo.group(1)) # return value of mo.group(1) is str
 
             if errno < (A.shape[0]+1):
 
