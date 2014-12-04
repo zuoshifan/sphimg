@@ -595,7 +595,7 @@ class KLTransform(config.Reader):
         # core.initmpi([2, 3], block_shape=[2, 2])
 
 
-        if self.grid_shape == [1, 1]:
+        if mpiutil.size == 1 or self.grid_shape == [1, 1]:
             self.distribute = False
 
         if self.distribute == False:
