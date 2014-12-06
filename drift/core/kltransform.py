@@ -184,7 +184,10 @@ def dist_eigh_gen(A, B):
 
             # evb = la.eigvalsh(B)
             evb, evecsb = rt.eigh(B, overwrite_a=False)
+            del evecsb # save memory use
             add_const = 1e-15 * evb[-1] - 2.0 * evb[0] + 1e-60
+            if B.context.mpi_comm.rank == 0:
+                print 'add_const = ', add_const
 
             # B[np.diag_indices(B.shape[0])] += add_const
             (g,r,c) =B.local_diagonal_indices()
