@@ -1250,14 +1250,6 @@ class BeamTransfer(object):
         # Create the local section of the output matrix
         matf = np.zeros((lrnum, lcnum), dtype=np.complex128, order='C')
 
-        ##------------------------------------------------
-        rank0 = True if comm is None or comm.rank == 0 else False
-        import sys
-        if rank0:
-            print 'Start matf computation...'
-            sys.stdout.flush()
-        ##----------------------------------------------------
-
         # each process computes a section of the global matrix
         # Should it be a +=?
         for pi in range(npol):
@@ -1276,12 +1268,6 @@ class BeamTransfer(object):
                         # matf[svbounds[fi]:svbounds[fi+1], svbounds[fj]:svbounds[fj+1]] += np.dot(fibeam * lmat, fjbeam.T.conj())
                         matf[lrbounds[i]:lrbounds[i+1], lcbounds[j]:lcbounds[j+1]] += np.dot(fibeam * lmat, fjbeam.T.conj())
 
-        ##------------------------------------------------
-        if rank0:
-            print 'matf computation done.'
-            sys.stdout.flush()
-        ##----------------------------------------------------
-
         if comm is None:
             return matf, False
         else:
@@ -1291,74 +1277,41 @@ class BeamTransfer(object):
             lsizes = comm.allgather(lsize)
             starts = comm.allgather(start)
 
-            # collect all local sections to a global matrix in rank 0
-            mpi_dtype = mpiutil.typemap(matf.dtype)
-            if comm.rank == 0:
-                # create global matrix and subarray datatype view of the global matrix
-                gmatf = np.empty(gsizes, dtype=matf.dtype)
-                subtypes = [mpi_dtype.Create_subarray(gsizes, lsizes[i], starts[i], order=mpiutil.ORDER_C).Commit() for i in range(comm.size)] # default order=ORDER_C
-            else:
-                gmatf = None
-
-            # Each process should send its local sections.
-            sreq = comm.Isend([matf, mpi_dtype], dest=0, tag=0)
-
-            if comm.rank == 0:
-                # Post each receive
-                reqs = [ comm.Irecv([gmatf, subtypes[sr]], source=sr, tag=0) for sr in range(comm.size) ]
-
-                # Wait for requests to complete
-                mpiutil.Prequest.Waitall(reqs)
-
-            sreq.Wait()
-
-            matf = None # release its memory
-
+            # for global array less than (min_dist, min_dist), collect all local sections to a global matrix in rank 0
             if nside < min_dist:
+                mpi_dtype = mpiutil.typemap(matf.dtype)
+                if comm.rank == 0:
+                    # create global matrix and subarray datatype view of the global matrix
+                    gmatf = np.empty(gsizes, dtype=matf.dtype)
+                    subtypes = [mpi_dtype.Create_subarray(gsizes, lsizes[i], starts[i], order=mpiutil.ORDER_C).Commit() for i in range(comm.size)] # default order=ORDER_C
+                else:
+                    gmatf = None
+
+                # Each process should send its local sections.
+                sreq = comm.Isend([matf, mpi_dtype], dest=0, tag=0)
+
+                if comm.rank == 0:
+                    # Post each receive
+                    reqs = [ comm.Irecv([gmatf, subtypes[sr]], source=sr, tag=0) for sr in range(comm.size) ]
+
+                    # Wait for requests to complete
+                    mpiutil.Prequest.Waitall(reqs)
+
+                sreq.Wait()
+
                 return gmatf, False
 
-            # # for global array larger than (min_dist, min_dist), create an distributed matrix and return
+            # # for global array larger than (min_dist, min_dist), create an distributed matrix
             else:
                 blk_size = (nside - 1) / comm.size + 1
                 blk_shape = (blk_size, blk_size)
-                gmatf = np.asfortranarray(gmatf) if gmatf is not None else None
-
-                gmatf = core.DistributedMatrix.from_global_array(gmatf, rank=0, block_shape=blk_shape, context=pc)
+                matf = np.asfortranarray(matf)
+                gmatf = core.DistributedMatrix([nside, nside], dtype=np.complex128, block_shape=blk_shape, context=pc)
+                # copy the local matrix to the corresponding section of the distributed matrix
+                for i in range(comm.size):
+                    gmatf = gmatf.np2self(matf, starts[i][0], starts[i][1], rank=i)
 
                 return gmatf, True
-
-            # else:
-            #     blk_size = (nside - 1) / comm.size + 1
-            #     blk_shape = (blk_size, blk_size)
-            #     matf = np.asfortranarray(matf)
-
-            #     ##----------------------------------------------
-            #     if rank0:
-            #         print 'Start to distribute gmatf...'
-            #         sys.stdout.flush()
-            #     ##----------------------------------------------
-
-            #     gmatf = core.DistributedMatrix([nside, nside], dtype=np.complex128, block_shape=blk_shape, context=pc)
-
-            #     ##----------------------------------------------
-            #     if rank0:
-            #         print 'Distribute gmatf done.'
-            #         print 'Start to copy to gmatf...'
-            #         sys.stdout.flush()
-            #     ##----------------------------------------------
-
-            #     # copy the local matrix to the corresponding section of the distributed matrix
-            #     for i in range(comm.size):
-            #         gmatf = gmatf.np2self(matf, starts[i][0], starts[i][1], rank=i)
-
-            #     ##----------------------------------------------
-            #     if rank0:
-            #         print 'Copy to gmatf done.'
-            #         sys.stdout.flush()
-            #     ##----------------------------------------------
-
-
-            #     return gmatf, True
 
 
     def project_matrix_diagonal_telescope_to_svd(self, mi, dmat):
