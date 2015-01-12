@@ -859,33 +859,23 @@ class KLTransform(config.Reader):
             self._transform_save()
 
         with h5py.File(self._evfile(mi), 'r') as f:
-            evals = f['evals'][:]
-            startind = np.searchsorted(evals, threshold) if threshold is not None else 0
-            modes = ( evals[startind:], f['evecs'][startind:] )
+            # If no modes are in the file, return None, None
+            if f['evals'].shape[0] == 0:
+                modes = None, None
+            else:
+                # Find modes satisfying threshold (if required).
+                evals = f['evals'][:]
+                startind = np.searchsorted(evals, threshold) if threshold is not None else 0
 
-            # If old data file perform complex conjugate
-            modes = modes if not self.olddatafile else ( modes[0], modes[1].conj() )
+                if startind == evals.size:
+                    modes = None, None
+                else:
+                    modes = ( evals[startind:], f['evecs'][startind:] )
 
-            return modes
+                    # If old data file perform complex conjugate
+                    modes = modes if not self.olddatafile else ( modes[0], modes[1].conj() )
 
-        #     # If no modes are in the file, return None, None
-        #     if f['evals'].shape[0] == 0:
-        #         modes = None, None
-        #     else:
-        #         # Find modes satisfying threshold (if required).
-        #         evals = f['evals'][:]
-        #         startind = np.searchsorted(evals, threshold) if threshold is not None else 0
-
-        #         # if startind == evals.size:
-        #         #     modes = None, None
-        #         # else:
-        #         #     modes = ( evals[startind:], f['evecs'][startind:] )
-        #         modes = ( evals[startind:], f['evecs'][startind:] )
-
-        #             # If old data file perform complex conjugate
-        #             modes = modes if not self.olddatafile else ( modes[0], modes[1].conj() )
-
-        # return modes
+        return modes
 
 
     @util.cache_last
@@ -1091,110 +1081,6 @@ class KLTransform(config.Reader):
         tvec = self.beamtransfer.project_vector_sky_to_svd(mi, vec)
 
         return self.project_vector_svd_to_kl(mi, tvec, threshold)
-
-
-    def project_vector_kl_to_svd(self, mi, vec, rank_ratio, lcut, temponly=False, threshold=None):
-        """Project an m-vector from the eigenbasis into the sky.
-
-        Parameters
-        ----------
-        mi : integer
-            Mode index to fetch for.
-        vec : np.ndarray
-            Visibility data vector in eigenbasis packed as [freq, kl_len]
-        threshold : real scalar, optional
-            Returns only KL-modes with S/N greater than threshold. By default
-            return all modes saved in the file (this maybe be a subset already,
-            see `transform_save`).
-
-        Returns
-        -------
-        projvector : np.ndarray
-            The vector projected into the sky, i.e., the a_lms.
-        """
-        evals, evecs = self.modes_m(mi, threshold)
-        kl_N = np.dot(evecs, evecs.T.conj()) # N^tilde
-
-        beam = self.beamtransfer.beam_svd(mi)
-        nfreq, svd_len, npol, lside_max = beam.shape
-        # svd_beam = svd_beam.reshape(nfreq * svd_len, npol, lside_max)
-        # print 'evecs.shape = ', evecs.shape
-        # print 'svd_beam.shape = ', svd_beam.shape
-        # kl_beam = np.dot(evecs, svd_beam) # B^tilde
-        # err
-
-        # npol = 1 if temponly else self.telescope.num_pol_sky
-
-        # Number of significant sv modes at each frequency, and the array bounds
-        svnum, svbounds = self.beamtransfer._svd_num(mi)
-
-        svd_beam = np.zeros((svbounds[-1], nfreq, npol, lside_max), dtype=beam.dtype)
-        for fi in self.beamtransfer._svd_freq_iter(mi):
-            svd_beam[svbounds[fi]:svbounds[fi+1], fi] = beam[fi, :svnum[fi]]
-
-        print 'evecs.shape = ', evecs.shape
-        print 'svd_beam.shape = ', svd_beam.shape
-
-        kl_beam = np.dot(evecs, svd_beam.reshape(svbounds[-1], -1)) # B^tilde
-        kl_beam = kl_beam.reshape(-1, nfreq, npol, lside_max)
-
-        # Get the SVD beam matrix
-        # beam = self.beam_svd(mi)
-        # svd_beam = self.beamtransfer.beam_svd(mi)
-        # nfreq = svd_beam[0]
-        lside = kl_beam.shape[-1] # lmax + 1 -mi
-        if lcut is None:
-           lcut = lside - 1 + mi
-        mmax = self.telescope.mmax
-        lcut = max(lcut, mmax) # must l >= m
-        lcut1 = lcut + 1
-        lcut1 = min(lcut1, lside + mi) # must have lcut <= lmax
-        if mpiutil.rank0 and mi == 0:
-            print 'Cut l at %d for lmax = %d, mmax = %d.' % (lcut1-1, lside-1+mi, mmax)
-        # nsky = npol * (lside - mi) # 4 * (lmax + 1 - mi)
-        kl_beam = kl_beam[..., :(lcut1 - mi)] # all zero for l < m
-
-        # Create the output matrix
-        alm = np.zeros((nfreq, self.telescope.num_pol_sky, self.telescope.lmax + 1,), dtype=np.complex128)
-
-        npol = 1 if temponly else self.telescope.num_pol_sky
-        for pi in range(npol):
-            for fi in self.beamtransfer._svd_freq_iter(mi):
-
-                if kl_beam.shape[0] == 0:
-                    continue
-
-                kl_Ninv = la.inv(kl_N)
-                kl_b = kl_beam[:, fi, pi, :]
-                lhs = np.dot(kl_b.T.conj(), np.dot(kl_Ninv, kl_b))
-                rhs = np.dot(kl_b.T.conj(), np.dot(kl_Ninv, vec))
-
-                x, resids, rank, s = la.lstsq(lhs, rhs, cond=1e-6)
-
-                # lvec = vec[svbounds[fi]:svbounds[fi+1]] # Matrix section for this frequency
-                # fbeam = svd_beam[fi, :svnum[fi], pi, :]
-                # x, resids, rank, s = la.lstsq(np.dot(fbeam.T.conj(), fbeam), np.dot(fbeam.T.conj(), lvec), cond=1e-6)
-                if rank > rank_ratio * (lside + mi):
-                    alm[fi, pi, mi:lcut1] = x
-                else:
-                    print ('Rank <= %.1f for m = %d, fi = %d, pol = {%d}...' % (rank_ratio*(lside + mi), mi, fi, pi)).format('T', 'Q', 'U', 'V')
-
-        return alm
-
-
-
-        # if evals is None:
-        #     return np.zeros((0,), dtype=np.complex128)
-
-        # if vec.shape[0] != evecs.shape[1]:
-        #     raise Exception("Vectors are incompatible.")
-
-        # return np.dot(evecs, vec)
-
-
-        # tvec = self.beamtransfer.project_vector_sky_to_svd(mi, vec)
-
-        # return self.project_vector_svd_to_kl(mi, tvec, threshold)
 
 
     def project_matrix_svd_to_kl(self, mi, mat, threshold=None):

@@ -758,10 +758,9 @@ class Timestream(object):
                     if evals is not None:
                         klmode *= (evals / (1.0 + evals))
 
-                # isvdmode = kl.project_vector_kl_to_svd(mi, klmode, threshold=self.klthreshold)
+                isvdmode = kl.project_vector_kl_to_svd(mi, klmode, threshold=self.klthreshold)
 
-                # sphmode = self.beamtransfer.project_vector_svd_to_sky(mi, isvdmode, rank_ratio, lcut)
-                sphmode = kl.project_vector_kl_to_svd(mi, klmode, rank_ratio, lcut)
+                sphmode = self.beamtransfer.project_vector_svd_to_sky(mi, isvdmode, rank_ratio, lcut)
 
                 return sphmode
 
