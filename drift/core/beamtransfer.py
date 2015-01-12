@@ -21,6 +21,7 @@ except ImportError:
    import pickle
 
 import os
+import sys
 import time
 
 import numpy as np
@@ -1250,6 +1251,13 @@ class BeamTransfer(object):
         # Create the local section of the output matrix
         matf = np.zeros((lrnum, lcnum), dtype=np.complex128, order='C')
 
+        ##------------------------------------------------
+        rank0 = True if comm is None or comm.rank == 0 else False
+        if rank0:
+            print 'Start matf computation...'
+            sys.stdout.flush()
+        ##----------------------------------------------------
+
         # each process computes a section of the global matrix
         # Should it be a +=?
         for pi in range(npol):
@@ -1267,6 +1275,16 @@ class BeamTransfer(object):
 
                         # matf[svbounds[fi]:svbounds[fi+1], svbounds[fj]:svbounds[fj+1]] += np.dot(fibeam * lmat, fjbeam.T.conj())
                         matf[lrbounds[i]:lrbounds[i+1], lcbounds[j]:lcbounds[j+1]] += np.dot(fibeam * lmat, fjbeam.T.conj())
+
+        ##------------------------------------------------
+        if rank0:
+            print 'matf computation done.'
+            sys.stdout.flush()
+        ##----------------------------------------------------
+
+        # reduce memory use
+        del mat
+        del beam
 
         if comm is None:
             return matf, False
@@ -1307,10 +1325,23 @@ class BeamTransfer(object):
                 blk_shape = (blk_size, blk_size)
                 matf = np.asfortranarray(matf)
                 gmatf = core.DistributedMatrix([nside, nside], dtype=np.complex128, block_shape=blk_shape, context=pc)
+
+                ##----------------------------------------------
+                if rank0:
+                    print 'Start to copy to gmatf...'
+                    sys.stdout.flush()
+                ##----------------------------------------------
+
                 # copy the local matrix to the corresponding section of the distributed matrix
                 for i in range(comm.size):
                     gmatf = gmatf.np2self(matf, starts[i][0], starts[i][1], rank=i)
 
+
+                ##----------------------------------------------
+                if rank0:
+                    print 'Copy to gmatf done.'
+                    sys.stdout.flush()
+                ##---------------------------------------------
                 return gmatf, True
 
 
