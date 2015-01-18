@@ -239,7 +239,7 @@ class UnequalFeedsCylinder(cylinder.PolarisedCylinderTelescope):
 
     num_cylinders = config.Property(proptype=typeutil.positive_int, default=3)
     num_feeds = config.Property(proptype=typeutil.positive_int_or_non_empty_list, default=[31, 32, 33])
-    feed_spacing = config.Property(proptype=typeutil.positive_float_or_non_empty_list, default=[15.5/30, 0.5, 15.5/31])
+    feed_spacing = config.Property(proptype=typeutil.positive_float_or_non_empty_list, default=[15.5/30, 0.5, 15.5/32])
     cylinder_width = config.Property(proptype=typeutil.positive_float, default=15.0)
 
 
@@ -282,5 +282,63 @@ class UnequalFeedsCylinder(cylinder.PolarisedCylinderTelescope):
 
         pos[:, 0] = cylinder_index * self.cylinder_spacing
         pos[:, 1] = np.arange(nf) * sp
+
+        return pos
+
+
+class ArbitraryPolarisedCylinder(cylinder.PolarisedCylinderTelescope):
+    """A polarized cylinder array with arbitrary number of feeeds and feeds position.
+
+    A class for multiple side by side placed cylinders, each may have different number of arbitrary spacing feeds.
+    """
+
+    num_cylinders = config.Property(proptype=typeutil.positive_int, default=3)
+    num_feeds = config.Property(proptype=typeutil.positive_int_or_non_empty_list, default=[31, 32, 33])
+    feed_spacing = config.Property(proptype=typeutil.non_empty_list, default=[((15.5/30) * np.arange(31)).tolist(), (0.5 * np.arange(32)).tolist(), ((15.5/32) * np.arange(33)).tolist()])
+    cylinder_width = config.Property(proptype=typeutil.positive_float, default=15.0)
+
+
+    def feed_positions_cylinder(self, cylinder_index):
+        """Get the feed positions on the specified cylinder.
+
+        Parameters
+        ----------
+        cylinder_index : integer
+            The cylinder index, an integer from 0 to self.num_cylinders.
+
+        Returns
+        -------
+        feed_positions : np.ndarray
+            The positions in the telescope plane of the receivers. Packed as
+            [[u1, v1], [u2, v2], ...].
+        """
+
+        if cylinder_index >= self.num_cylinders or cylinder_index < 0:
+            raise Exception("Cylinder index is invalid.")
+
+        ncyl = self.num_cylinders
+        if len(self.num_feeds) == 1:
+            self.num_feeds *= ncyl
+        if len(self.num_feeds) != ncyl:
+            raise Exception('Invalid num_feeds.')
+
+        if len(self.feed_spacing) == 1:
+            self.feed_spacing *= ncyl
+        if len(self.feed_spacing) != ncyl:
+            raise Exception('Invalid feed_spacings.')
+        for idx in range(ncyl):
+            if len(self.feed_spacing[idx]) != self.num_feeds[idx]:
+                raise Exception('Invalid feed_spacings.')
+
+        nf = self.num_feeds[cylinder_index]
+        sp = self.feed_spacing[cylinder_index]
+        if self.non_commensurate:
+            nf = nf - cylinder_index
+            sp = sp / (nf - 1.0) * nf
+
+        pos = np.empty([nf, 2], dtype=np.float64)
+
+        pos[:, 0] = cylinder_index * self.cylinder_spacing
+        pos[:, 1] = sp
 
         return pos

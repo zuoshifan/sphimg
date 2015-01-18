@@ -24,7 +24,8 @@ teltype_dict =  {   'UnpolarisedCylinder'   : cylinder.UnpolarisedCylinderTelesc
                     'RestrictedExtra'       : restrictedcylinder.RestrictedExtra,
                     'GradientCylinder'       : exotic_cylinder.GradientCylinder,
                     'ShiftedCylinder'        : exotic_cylinder.PolarisedCylinderShift,
-                    'UnequalFeedsCylinder'  : exotic_cylinder.UnequalFeedsCylinder
+                    'UnequalFeedsCylinder'  : exotic_cylinder.UnequalFeedsCylinder,
+                    'ArbitraryCylinder'     : exotic_cylinder.ArbitraryPolarisedCylinder
                 }
 
 
