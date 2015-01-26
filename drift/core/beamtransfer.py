@@ -1218,9 +1218,6 @@ class BeamTransfer(object):
 
         npol = 1 if temponly else self.telescope.num_pol_sky
 
-        # Get the SVD beam matrix
-        # beam = self.beam_svd(mi)
-
         # Number of significant sv modes at each frequency, and the array bounds
         svnum, svbounds = self._svd_num(mi)
         nside = svbounds[-1] # ndof(mi)
@@ -1273,24 +1270,17 @@ class BeamTransfer(object):
         ##----------------------------------------------------
 
         # each process computes a section of the global matrix
-        # Should it be a +=?
         for pi in range(npol):
             for pj in range(npol):
-                # for fi in self._svd_freq_iter(mi):
                 for (i, fi) in enumerate(lrfreqs):
 
-                    # fibeam = beam[fi, :svnum[fi], pi, :] # Beam for this pol, freq, and svcut (i)
                     fibeam = rbeam[fi-slrfreq, :svnum[fi], pi, :] # Beam for this pol, freq, and svcut (i)
 
-                    # for fj in self._svd_freq_iter(mi):
                     for (j, fj) in enumerate(lcfreqs):
-                        # fjbeam = beam[fj, :svnum[fj], pj, :] # Beam for this pol, freq, and svcut (j)
                         fjbeam = cbeam[fj-slcfreq, :svnum[fj], pj, :] # Beam for this pol, freq, and svcut (j)
-                        # lmat = mat[pi, pj, mi:, fi, fj] # Local section of the sky matrix (i.e C_l part)
-                        # lmat = mat[pi, pj, :, fi, fj] # Local section of the sky matrix (i.e C_l part)
+
                         lmat = mat[pi, pj, :, fi-slrfreq, fj-slcfreq] # Local section of the sky matrix (i.e C_l part)
 
-                        # matf[svbounds[fi]:svbounds[fi+1], svbounds[fj]:svbounds[fj+1]] += np.dot(fibeam * lmat, fjbeam.T.conj())
                         matf[lrbounds[i]:lrbounds[i+1], lcbounds[j]:lcbounds[j+1]] += np.dot(fibeam * lmat, fjbeam.T.conj())
 
         ##------------------------------------------------
@@ -1302,7 +1292,6 @@ class BeamTransfer(object):
         # reduce memory use
         del mat
         del lmat
-        # del beam
         del rbeam
         del cbeam
         del fibeam
