@@ -1199,8 +1199,8 @@ class BeamTransfer(object):
         mi : integer
             Mode index to fetch for.
         mat : np.ndarray
-            Sky matrix packed as [pol, pol, l, freq, freq]. Must have pol
-            indices even if `temponly=True`.
+            Sky matrix or file containing sky matrix packed as [pol, pol, l, freq, freq].
+        Must have pol indices even if `temponly=True`.
         temponly: boolean
             Force projection of temperature (TT) part only (default: False)
         pc :
@@ -1219,7 +1219,7 @@ class BeamTransfer(object):
         npol = 1 if temponly else self.telescope.num_pol_sky
 
         # Get the SVD beam matrix
-        beam = self.beam_svd(mi)
+        # beam = self.beam_svd(mi)
 
         # Number of significant sv modes at each frequency, and the array bounds
         svnum, svbounds = self._svd_num(mi)
@@ -1237,7 +1237,9 @@ class BeamTransfer(object):
         nr, sr, er = mpiutil.split_m(gflen, grid_shape[0])[:, grid_pos[0]] # local row
         nc, sc, ec = mpiutil.split_m(gflen, grid_shape[1])[:, grid_pos[1]] # local column
         lrfreqs = gfreqs[sr:er] # local row frequency list
+        slrfreq, elrfreq = lrfreqs[0], lrfreqs[-1] # start and end local row frequency
         lcfreqs = gfreqs[sc:ec] # local column frequency list
+        slcfreq, elcfreq = lcfreqs[0], lcfreqs[-1] # start and end local column frequency
 
         lrsvnum = [svnum[lfi] for lfi in lrfreqs]
         gr_idx = svbounds[lrfreqs[0]] # start row index in the global matrix corresponding to the local section
@@ -1247,6 +1249,18 @@ class BeamTransfer(object):
         gc_idx = svbounds[lcfreqs[0]] # start column index in the global matrix corresponding to the local section
         lcnum = np.sum(lcsvnum) # local number of columes of out matrix
         lcbounds = np.cumsum(np.insert(lcsvnum, 0, 0)) # local column bounds
+
+        # read in corresponding section of the beam matrix
+        with h5py.File(self._svdfile(mi), 'r') as svdfile:
+            rbeam = svdfile['beam_svd'][slrfreq:(elrfreq+1)] # beam section corresponding to the row process
+            cbeam = svdfile['beam_svd'][slcfreq:(elcfreq+1)] # beam section corresponding to the column process
+
+        # read in corresponding section of the Cl matrix
+        if isinstance(mat, np.ndarray):
+            mat = mat[:npol, :npol, :, slrfreq:(elrfreq+1), slcfreq:(elcfreq+1)]
+        else:
+            with h5py.File(mat, 'r') as cl:
+                mat = cl['cv'][:npol, :npol, mi:, slrfreq:(elrfreq+1), slcfreq:(elcfreq+1)]
 
         # Create the local section of the output matrix
         matf = np.zeros((lrnum, lcnum), dtype=np.complex128, order='C')
@@ -1265,13 +1279,16 @@ class BeamTransfer(object):
                 # for fi in self._svd_freq_iter(mi):
                 for (i, fi) in enumerate(lrfreqs):
 
-                    fibeam = beam[fi, :svnum[fi], pi, :] # Beam for this pol, freq, and svcut (i)
+                    # fibeam = beam[fi, :svnum[fi], pi, :] # Beam for this pol, freq, and svcut (i)
+                    fibeam = rbeam[fi-slrfreq, :svnum[fi], pi, :] # Beam for this pol, freq, and svcut (i)
 
                     # for fj in self._svd_freq_iter(mi):
                     for (j, fj) in enumerate(lcfreqs):
-                        fjbeam = beam[fj, :svnum[fj], pj, :] # Beam for this pol, freq, and svcut (j)
+                        # fjbeam = beam[fj, :svnum[fj], pj, :] # Beam for this pol, freq, and svcut (j)
+                        fjbeam = cbeam[fj-slcfreq, :svnum[fj], pj, :] # Beam for this pol, freq, and svcut (j)
                         # lmat = mat[pi, pj, mi:, fi, fj] # Local section of the sky matrix (i.e C_l part)
-                        lmat = mat[pi, pj, :, fi, fj] # Local section of the sky matrix (i.e C_l part)
+                        # lmat = mat[pi, pj, :, fi, fj] # Local section of the sky matrix (i.e C_l part)
+                        lmat = mat[pi, pj, :, fi-slrfreq, fj-slcfreq] # Local section of the sky matrix (i.e C_l part)
 
                         # matf[svbounds[fi]:svbounds[fi+1], svbounds[fj]:svbounds[fj+1]] += np.dot(fibeam * lmat, fjbeam.T.conj())
                         matf[lrbounds[i]:lrbounds[i+1], lcbounds[j]:lcbounds[j+1]] += np.dot(fibeam * lmat, fjbeam.T.conj())
@@ -1284,7 +1301,12 @@ class BeamTransfer(object):
 
         # reduce memory use
         del mat
-        del beam
+        del lmat
+        # del beam
+        del rbeam
+        del cbeam
+        del fibeam
+        del fjbeam
 
         if comm is None:
             return matf, False

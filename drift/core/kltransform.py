@@ -395,14 +395,15 @@ class KLTransform(config.Reader):
 
         if rank0:
             print 'Start signal covariance projection for m = %d...' % mi
-        cvb_s, dist = self.beamtransfer.project_matrix_sky_to_svd(mi, self.cvsg_m(mi), pc=pc, min_dist=self.min_dist)
+        # cvb_s, dist = self.beamtransfer.project_matrix_sky_to_svd(mi, self.cvsg_m(mi), pc=pc, min_dist=self.min_dist)
+        cvb_s, dist = self.beamtransfer.project_matrix_sky_to_svd(mi, self._cvsg, pc=pc, min_dist=self.min_dist)
         if rank0:
             print 'Signal covariance projection for m = %d done.' % mi
             print 'Start foreground covariance projection for m = %d...' % mi
             sys.stdout.flush()
 
         if self.use_foregrounds:
-            cvb_n, dist = self.beamtransfer.project_matrix_sky_to_svd(mi, self.cvfg_m(mi), pc=pc, min_dist=self.min_dist)
+            cvb_n, dist = self.beamtransfer.project_matrix_sky_to_svd(mi, self._cvfg, pc=pc, min_dist=self.min_dist)
         else:
             if dist:
                 cvb_n = cvb_s.empty_like()
