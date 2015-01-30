@@ -137,7 +137,72 @@ def eigh_gen(A, B):
     return evals, evecs, add_const
 
 
-def dist_eigh_gen(A, B):
+# def dist_eigh_gen(A, B):
+#     """Solve the generalised eigenvalue problem for distributed matrices. :math:`\mathbf{A} \mathbf{v} =
+#     \lambda \mathbf{B} \mathbf{v}`
+
+#     This routine will attempt to correct for when `B` is not positive definite
+#     (usually due to numerical precision), by adding a constant diagonal to make
+#     all of its eigenvalues positive.
+
+#     Parameters
+#     ----------
+#     A, B : DistributedMatrix
+#         Matrices to operate on.
+
+#     Returns
+#     -------
+#     evals : np.ndarray
+#         Eigenvalues of the problem.
+#     evecs : DistributedMatrix
+#         2D array of eigenvectors (packed column by column).
+#     add_const : scalar
+#         The constant added on the diagonal to regularise.
+#     """
+#     add_const = 0.0
+
+#     try:
+#         # evals, evecs = rt.eigh(A, B, overwrite_a=True, overwrite_b=True)
+#         evals, evecs = rt.eigh(A, B, overwrite_a=False, overwrite_b=False) # can not overwrite A/B if you want to do the following exception handle
+#     except core.ScalapackException as e:
+#         if B.context.mpi_comm.rank == 0:
+#             print "Error occured in distributed eigenvalue solve."
+#         # Get error number
+#         mo = re.search('order (\\d+)', e.message)
+
+#         # If exception unrecognised then re-raise.
+#         if mo is None:
+#             raise e
+
+#         errno = int(mo.group(1)) # return value of mo.group(1) is str
+
+#         if errno < (A.global_shape[0]+1):
+
+#             if B.context.mpi_comm.rank == 0:
+#                 print "Distributed matrix `B` probably not positive definite due to numerical issues. \
+#                 Trying to add a constant diagonal...."
+
+#             # evb = la.eigvalsh(B)
+#             evb, evecsb = rt.eigh(B, overwrite_a=False)
+#             del evecsb # save memory use
+#             add_const = 1e-15 * evb[-1] - 2.0 * evb[0] + 1e-60
+#             if B.context.mpi_comm.rank == 0:
+#                 print 'add_const = ', add_const
+
+#             # B[np.diag_indices(B.shape[0])] += add_const
+#             (g,r,c) =B.local_diagonal_indices()
+#             B.local_array[r,c] += add_const
+#             evals, evecs = rt.eigh(A, B, overwrite_a=True, overwrite_b=True)
+
+#         else:
+#             # print "Strange convergence issue. Trying non divide and conquer routine."
+#             # evals, evecs = la.eigh(A, B, overwrite_a=True, overwrite_b=True, turbo=False)
+#             raise Exception('Strange convergence issue.')
+
+#     return evals, evecs, add_const
+
+
+def dist_eigh_gen(A, B, return_inv=False):
     """Solve the generalised eigenvalue problem for distributed matrices. :math:`\mathbf{A} \mathbf{v} =
     \lambda \mathbf{B} \mathbf{v}`
 
@@ -149,6 +214,9 @@ def dist_eigh_gen(A, B):
     ----------
     A, B : DistributedMatrix
         Matrices to operate on.
+    return_inv : boolean, optional
+        Also return the inverse of the Hermitian conjugate of the
+        eigen-vector matrix.
 
     Returns
     -------
@@ -158,15 +226,16 @@ def dist_eigh_gen(A, B):
         2D array of eigenvectors (packed column by column).
     add_const : scalar
         The constant added on the diagonal to regularise.
+    inv : DistributedMatrix
+        2D array of inv(evecs.H). Only when return_inv = True.
     """
     add_const = 0.0
 
     try:
-        # evals, evecs = rt.eigh(A, B, overwrite_a=True, overwrite_b=True)
-        evals, evecs = rt.eigh(A, B, overwrite_a=False, overwrite_b=False) # can not overwrite A/B if you want to do the following exception handle
+        U = rt.cholesky(B, lower=False, overwrite_a=False, zero_triangle=True) # can not overwrite A/B if you want to do the following exception handle
     except core.ScalapackException as e:
         if B.context.mpi_comm.rank == 0:
-            print "Error occured in distributed eigenvalue solve."
+            print "Error occured in distributed Cholesky factorization."
         # Get error number
         mo = re.search('order (\\d+)', e.message)
 
@@ -174,32 +243,75 @@ def dist_eigh_gen(A, B):
         if mo is None:
             raise e
 
-        errno = int(mo.group(1)) # return value of mo.group(1) is str
+        if B.context.mpi_comm.rank == 0:
+            print "Distributed matrix `B` probably not positive definite due to numerical issues. Trying to add a constant diagonal...."
 
-        if errno < (A.global_shape[0]+1):
+        evb = rt.eigh(B, eigvals_only=True, overwrite_a=False)
+        add_const = 1e-15 * evb[-1] - 2.0 * evb[0] + 1e-60
+        if B.context.mpi_comm.rank == 0:
+            print 'add_const = ', add_const
 
-            if B.context.mpi_comm.rank == 0:
-                print "Distributed matrix `B` probably not positive definite due to numerical issues. \
-                Trying to add a constant diagonal...."
+        (g,r,c) =B.local_diagonal_indices()
+        B.local_array[r,c] += add_const
+        U = rt.cholesky(B, lower=False, overwrite_a=True, zero_triangle=True)
 
-            # evb = la.eigvalsh(B)
-            evb, evecsb = rt.eigh(B, overwrite_a=False)
-            del evecsb # save memory use
-            add_const = 1e-15 * evb[-1] - 2.0 * evb[0] + 1e-60
-            if B.context.mpi_comm.rank == 0:
-                print 'add_const = ', add_const
+    if return_inv:
+        invU = rt.triinv(U, lower=False, overwrite_a=False)
+    else:
+        invU = rt.triinv(U, lower=False, overwrite_a=True)
+        del U
+    A = rt.dot(rt.dot(invU, A, 'C', 'N'), invU, 'N', 'N')
+    evals, Y = rt.eigh(A)
+    X = rt.dot(invU, Y, 'N', 'N')
+    if return_inv:
+        invXH = rt.dot(U, Y, 'C', 'N')
 
-            # B[np.diag_indices(B.shape[0])] += add_const
-            (g,r,c) =B.local_diagonal_indices()
-            B.local_array[r,c] += add_const
-            evals, evecs = rt.eigh(A, B, overwrite_a=True, overwrite_b=True)
+    if return_inv:
+        return evals, X, add_const, invXH
+    else:
+        return evals, X, add_const
 
-        else:
-            # print "Strange convergence issue. Trying non divide and conquer routine."
-            # evals, evecs = la.eigh(A, B, overwrite_a=True, overwrite_b=True, turbo=False)
-            raise Exception('Strange convergence issue.')
 
-    return evals, evecs, add_const
+    # try:
+    #     # evals, evecs = rt.eigh(A, B, overwrite_a=True, overwrite_b=True)
+    #     evals, evecs = rt.eigh(A, B, overwrite_a=False, overwrite_b=False) # can not overwrite A/B if you want to do the following exception handle
+    # except core.ScalapackException as e:
+    #     if B.context.mpi_comm.rank == 0:
+    #         print "Error occured in distributed eigenvalue solve."
+    #     # Get error number
+    #     mo = re.search('order (\\d+)', e.message)
+
+    #     # If exception unrecognised then re-raise.
+    #     if mo is None:
+    #         raise e
+
+    #     errno = int(mo.group(1)) # return value of mo.group(1) is str
+
+    #     if errno < (A.global_shape[0]+1):
+
+    #         if B.context.mpi_comm.rank == 0:
+    #             print "Distributed matrix `B` probably not positive definite due to numerical issues. \
+    #             Trying to add a constant diagonal...."
+
+    #         # evb = la.eigvalsh(B)
+    #         evb, evecsb = rt.eigh(B, overwrite_a=False)
+    #         del evecsb # save memory use
+    #         add_const = 1e-15 * evb[-1] - 2.0 * evb[0] + 1e-60
+    #         if B.context.mpi_comm.rank == 0:
+    #             print 'add_const = ', add_const
+
+    #         # B[np.diag_indices(B.shape[0])] += add_const
+    #         (g,r,c) =B.local_diagonal_indices()
+    #         B.local_array[r,c] += add_const
+    #         evals, evecs = rt.eigh(A, B, overwrite_a=True, overwrite_b=True)
+
+    #     else:
+    #         # print "Strange convergence issue. Trying non divide and conquer routine."
+    #         # evals, evecs = la.eigh(A, B, overwrite_a=True, overwrite_b=True, turbo=False)
+    #         raise Exception('Strange convergence issue.')
+
+    # return evals, evecs, add_const
+
 
 
 def inv_gen(A):
@@ -472,17 +584,23 @@ class KLTransform(config.Reader):
 
         # Perform the generalised eigenvalue problem to get the KL-modes.
         st = time.time()
+        inv = None
         if dist:
             # evals, evecs = su.eigh_gen(cvb_sr, cvb_nr)
             # evecs = evecs.to_global_array() # no need Hermitian transpose
             # evals, evecs = rt.eigh(cvb_sr, cvb_nr)
-            evals, evecs, ac = dist_eigh_gen(cvb_sr, cvb_nr)
-            evecs = evecs.H # Hermitian conjugate of the distributed matrix
+            if self.inverse:
+                evals, evecs, ac, inv = dist_eigh_gen(cvb_sr, cvb_nr, return_inv=True) # NOTE: evecs = P^H
+            else:
+                evals, evecs, ac = dist_eigh_gen(cvb_sr, cvb_nr) # NOTE: evecs = P^H
+            # evecs = evecs.H # Hermitian conjugate of the distributed matrix
             # ac = 0.0
         else:
             if rank0:
-                evals, evecs, ac = eigh_gen(cvb_sr, cvb_nr)
-                evecs = evecs.T.conj() # need Hermitian transpose
+                evals, evecs, ac = eigh_gen(cvb_sr, cvb_nr) # NOTE: evecs = P^H
+                # evecs = evecs.T.conj() # need Hermitian transpose
+                if self.inverse:
+                    inv = inv_gen(evecs.T.conj())
             else:
                 evals, evecs, ac = None, None, 0.0
 
@@ -490,16 +608,16 @@ class KLTransform(config.Reader):
         if rank0:
             print "Time =", (et-st)
 
-        # Generate inverse if required
-        inv = None
-        if self.inverse:
-            if dist:
-                inv = rt.pinv(evecs, overwrite_a=False).T # NOTE: must overwrite_a = False
-                # due to bugs in f2py, here convert to numpy array
-                inv = inv.to_global_array(rank=0)
-                evecs = evecs.to_global_array(rank=0)
-            else:
-                inv = inv_gen(evecs).T if evecs is not None else None
+        # # Generate inverse if required
+        # inv = None
+        # if self.inverse:
+        #     if dist:
+        #         inv = rt.pinv(evecs, overwrite_a=False).T # NOTE: must overwrite_a = False
+        #         # due to bugs in f2py, here convert to numpy array
+        #         inv = inv.to_global_array(rank=0)
+        #         evecs = evecs.to_global_array(rank=0)
+        #     else:
+        #         inv = inv_gen(evecs).T if evecs is not None else None
 
         # Construct dictionary of extra parameters to return
         evextra = {'ac' : ac}
@@ -548,11 +666,11 @@ class KLTransform(config.Reader):
                 i_ev = np.searchsorted(evals, self.threshold)
 
                 evals = evals[i_ev:]
-                evecs = evecs[i_ev:]
+                evecs = evecs[:, i_ev:].T.conj() # P_s or R=(Q_t P_s)
                 print "Modes with S/N > %f: %i of %i" % (self.threshold, evals.size, evalsf.size)
             if self.inverse:
                 if self.subset:
-                    inv = inv[i_ev:]
+                    inv = inv[:, i_ev:] # P_(-s) or (P_(-s) Q_(-t))
 
             ## Write out Eigenvals and Vectors
 
@@ -936,9 +1054,9 @@ class KLTransform(config.Reader):
 
                 if threshold != None:
                     nevals = evals.size
-                    inv = inv[(-nevals):]
+                    inv = inv[:, (-nevals):]
 
-                return inv.T
+                return inv
 
             else:
                 print "Inverse not cached, generating pseudo-inverse."

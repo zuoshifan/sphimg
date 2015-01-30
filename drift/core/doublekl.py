@@ -49,17 +49,23 @@ class DoubleKL(kltransform.KLTransform):
         # Find joint eigenbasis and transformation matrix
         if rank0:
             print 'Start first KL transfom for m = %d...' % mi
+        inv = None
         if dist:
             # evals, evecs = su.eigh_gen(cs, cn)
             # evecs = evecs.to_global_array() # no need Hermitian transpose
             # evals, evecs = rt.eigh(cs, cn)
-            evals, evecs, ac = kltransform.dist_eigh_gen(cs, cn)
-            evecs = evecs.H # Hermitian conjugate of the distributed matrix
+            if self.inverse:
+                evals, evecs, ac, inv = kltransform.dist_eigh_gen(cs, cn, return_inv=True) # NOTE: evecs = P^H, inv = P^-1
+            else:
+                evals, evecs, ac = dist_eigh_gen(cvb_sr, cvb_nr) # NOTE: evecs = P^H
+            # evecs = evecs.H # Hermitian conjugate of the distributed matrix
             # ac = 0.0
         else:
             if rank0:
-                evals, evecs, ac = kltransform.eigh_gen(cs, cn)
-                evecs = evecs.T.conj() # need Hermitian transpose
+                evals, evecs, ac = kltransform.eigh_gen(cs, cn) # NOTE: evecs = P^H
+                # evecs = evecs.T.conj() # need Hermitian transpose
+                if self.inverse:
+                    inv = kltransform.inv_gen(evecs.T.conj()) # P^-1
             else:
                 evals, evecs, ac = None, None, 0.0
         if rank0:
@@ -90,54 +96,55 @@ class DoubleKL(kltransform.KLTransform):
 
 
         # else one or more evals greater than foreground_threshold
-        if rank0:
-            print 'Start inverse calculation for m = %d...' % mi
-        # Construct inverse transformation if required
-        inv = None
-        if self.inverse:
-            if dist:
-                inv = rt.pinv(evecs, overwrite_a=False).T # NOTE: must overwrite_a = False
-            else:
-                inv = kltransform.inv_gen(evecs).T if evecs is not None else None
-        if rank0:
-            print 'Inverse calculation for m = %d done.' % mi
+        # if rank0:
+        #     print 'Start inverse calculation for m = %d...' % mi
+        # # Construct inverse transformation if required
+        # inv = None
+        # if self.inverse:
+        #     if dist:
+        #         inv = rt.pinv(evecs, overwrite_a=False).T # NOTE: must overwrite_a = False
+        #     else:
+        #         inv = kltransform.inv_gen(evecs).T if evecs is not None else None
+        # if rank0:
+        #     print 'Inverse calculation for m = %d done.' % mi
 
         if dist:
             # copy to numpy array
             evals = evals[ind:]
             dtype = evecs.dtype
             if ind < nside:
-                evecs = evecs.self2np(srow=ind, scol=0, rank=0)
+                evecs = evecs.self2np(srow=0, scol=ind, rank=0)  # (P_s)^H
             else:
                 evecs = np.array([], dtype=dtype).reshape(0, nside)
             if self.inverse:
                 if ind < nside:
-                    inv = inv.self2np(srow=ind, scol=0, rank=0)
+                    inv = inv.self2np(srow=0, scol=ind, rank=0) # P_(-s)
                 else:
-                    inv = np.array([], dtype=dtype).reshape(0, nside)
+                    inv = np.array([], dtype=dtype).reshape(nside, 0)
         else:
             if rank0:
                 # Construct the foreground removed subset of the space
                 evals = evals[ind:]
-                evecs = evecs[ind:]
-                inv = inv[ind:] if self.inverse else None
+                evecs = evecs[:, ind:] # (P_s)^H
+                if self.inverse:
+                    inv = inv[:, ind:] # P_(-s)
 
         if rank0 and evals.size > 0:
             # Generate the full S and N covariances in the truncated basis
             cs = np.diag(evals) # Lambda_s
-            cn = np.dot(evecs, evecs.T.conj()) # P_s Nbar P_s^\dagger, where Nbar = I
+            cn = np.dot(evecs.T.conj(), evecs) # P_s Nbar P_s^\dagger, where Nbar = I
             cn[np.diag_indices_from(cn)] += 1.0 # I + P_s P_s^\dagger
             print 'Start second KL transfom for m = %d...' % mi
             # Find the eigenbasis and the transformation into it.
-            evals, evecs2, ac = kltransform.eigh_gen(cs, cn)
-            evecs = np.dot(evecs2.T.conj(), evecs)
+            evals, evecs2, ac = kltransform.eigh_gen(cs, cn) # NOTE: evecs2 = Q^H
+            evecs = np.dot(evecs, evecs2) # (P_s)^H Q^H
             print 'Second KL transfom for m = %d done.' % mi
             sys.stdout.flush()
 
             # Construct the inverse if required.
             if self.inverse:
-                inv2 = kltransform.inv_gen(evecs2)
-                inv = np.dot(inv2, inv)
+                inv2 = kltransform.inv_gen(evecs2.T.conj()) # Q^-1
+                inv = np.dot(inv, inv2) # P_(-s) Q^-1
 
         if comm is not None:
             comm.Barrier()
