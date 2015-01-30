@@ -788,7 +788,8 @@ class KLTransform(config.Reader):
             color = mpiutil.rank
         else:
             # initialize the distribute calculation communicators
-            core.ProcessContext([1, mpiutil.size], comm=None) # process context
+            # core.ProcessContext([1, mpiutil.size], comm=None) # process context
+            core.initmpi([1, mpiutil.size])
 
             grid_size = np.prod(self.grid_shape)
             if mpiutil.size % grid_size == 0:
