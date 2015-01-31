@@ -1332,8 +1332,9 @@ class BeamTransfer(object):
 
             # # for global array larger than (min_dist, min_dist), create an distributed matrix
             else:
-                blk_size = (nside - 1) / comm.size + 1
-                blk_shape = (blk_size, blk_size)
+                # blk_size = (nside - 1) / comm.size + 1
+                # blk_shape = (blk_size, blk_size)
+                blk_shape = (32, 32) # block size of 16 or 32 is most effective
                 matf = np.asfortranarray(matf)
                 gmatf = core.DistributedMatrix([nside, nside], dtype=np.complex128, block_shape=blk_shape, context=pc)
 
