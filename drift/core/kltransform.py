@@ -573,7 +573,7 @@ class KLTransform(config.Reader):
 
         # Ensure that number of SVD degrees of freedom is non-zero before proceeding
         if nside == 0:
-            return np.array([]), np.array([[]]), np.array([[]]), { 'ac' : 0.0 }
+            return np.array([]), np.array([[]]), np.array([[]]), { 'ac' : 0.0 }, False
 
         # Fetch the covariance matrices to diagonalise
         st = time.time()
@@ -604,6 +604,9 @@ class KLTransform(config.Reader):
             else:
                 evals, evecs, ac = None, None, 0.0
 
+            if comm is not None:
+                evals = comm.bcast(evals, root=0)
+
         et=time.time()
         if rank0:
             print "Time =", (et-st)
@@ -625,7 +628,7 @@ class KLTransform(config.Reader):
         if comm is not None:
             comm.Barrier()
 
-        return evals, evecs, inv, evextra
+        return evals, evecs, inv, evextra, dist
 
 
 
@@ -652,26 +655,53 @@ class KLTransform(config.Reader):
         rank0 = True if comm is None or comm.Get_rank() == 0 else False
         if rank0:
             print "Constructing signal and noise covariances for m = %d ..." % mi
-        evals, evecs, inv, evextra = self._transform_m(mi, comm)
+        evals, evecs, inv, evextra, dist = self._transform_m(mi, comm)
+
+        ## If modes have been already truncated (e.g. DoubleKL) then pad out
+        ## with zeros at the lower end.
+        nside = self.beamtransfer.ndof(mi)
+        evalsf = np.zeros(nside, dtype=np.float64)
+        if evals.size != 0:
+            evalsf[(-evals.size):] = evals
+
+        # Discard eigenmodes with S/N below threshold if requested.
+        if self.subset:
+            i_ev = np.searchsorted(evals, self.threshold)
+
+            evals = evals[i_ev:]
+            if dist:
+                # evecs = evecs[:, i_ev:].H # P_s or R=(Q_t P_s)
+                # evecs = evecs.to_global_array(rank=0)
+                # NOTE: must use self2np, since [] is global operation on MPI_COMM_WORLD
+                evecs = evecs.self2np(srow=0, scol=i_ev, rank=0) # rank0 has (P_s)^H or R^H = (Q_t P_s)^H, other rank has None
+                if rank0:
+                    evecs = evecs.T.conj() # P_s or R=(Q_t P_s)
+                if self.inverse:
+                    # inv = inv[:, i_ev:] # P_(-s) or (P_(-s) Q_(-t))
+                    # inv = inv.to_global_array(rank=0)
+                    inv = inv.self2np(srow=0, scol=i_ev, rank=0) # P_(-s) or (P_(-s) Q_(-t))
+            else:
+                if rank0:
+                    evecs = evecs[:, i_ev:].T.conj() # P_s or R=(Q_t P_s)
+                    inv = inv[:, i_ev:] # P_(-s) or (P_(-s) Q_(-t))
+        else:
+            if dist:
+                evecs = evecs.H.to_global_array(rank=0) # P
+                if self.inverse:
+                    inv = inv.to_global_array(rank=0) # P^-1
+            else:
+                if rank0:
+                    evecs = evecs.T.conj() # P
+
+            #     # print "Modes with S/N > %f: %i of %i" % (self.threshold, evals.size, evalsf.size)
+            # if self.inverse:
+            #     if self.subset:
+            #         inv = inv[:, i_ev:] # P_(-s) or (P_(-s) Q_(-t))
+            #         if dist:
+            #             inv = inv.to_global_array(rank=0)
 
         if rank0:
-            ## If modes have been already truncated (e.g. DoubleKL) then pad out
-            ## with zeros at the lower end.
-            nside = self.beamtransfer.ndof(mi)
-            evalsf = np.zeros(nside, dtype=np.float64)
-            if evals.size != 0:
-                evalsf[(-evals.size):] = evals
-            # Discard eigenmodes with S/N below threshold if requested.
-            if self.subset:
-                i_ev = np.searchsorted(evals, self.threshold)
-
-                evals = evals[i_ev:]
-                evecs = evecs[:, i_ev:].T.conj() # P_s or R=(Q_t P_s)
-                print "Modes with S/N > %f: %i of %i" % (self.threshold, evals.size, evalsf.size)
-            if self.inverse:
-                if self.subset:
-                    inv = inv[:, i_ev:] # P_(-s) or (P_(-s) Q_(-t))
-
+            print "Modes with S/N > %f: %i of %i" % (self.threshold, evals.size, evalsf.size)
             ## Write out Eigenvals and Vectors
 
             # Create file and set some metadata

@@ -39,7 +39,7 @@ class DoubleKL(kltransform.KLTransform):
 
         # Ensure that number of SVD degrees of freedom is non-zero before proceeding
         if nside == 0:
-            return np.array([]), np.array([[]]), np.array([[]]), { 'ac' : 0.0, 'f_evals' : np.array([]) }
+            return np.array([]), np.array([[]]), np.array([[]]), { 'ac' : 0.0, 'f_evals' : np.array([]) }, False
 
         # Construct S and F matrices and regularise foregrounds
         self.use_thermal = False
@@ -92,7 +92,7 @@ class DoubleKL(kltransform.KLTransform):
         if ind == nside:
             if comm is not None:
                 comm.Barrier()
-            return np.array([]), np.array([]).reshape(0, nside), np.array([]).reshape(0, nside), evextra
+            return np.array([]), np.array([]).reshape(0, nside), np.array([]).reshape(0, nside), evextra, False
 
 
         # else one or more evals greater than foreground_threshold
@@ -112,15 +112,17 @@ class DoubleKL(kltransform.KLTransform):
             # copy to numpy array
             evals = evals[ind:]
             dtype = evecs.dtype
-            if ind < nside:
-                evecs = evecs.self2np(srow=0, scol=ind, rank=0)  # (P_s)^H
-            else:
-                evecs = np.array([], dtype=dtype).reshape(0, nside)
-            if self.inverse:
-                if ind < nside:
-                    inv = inv.self2np(srow=0, scol=ind, rank=0) # P_(-s)
-                else:
-                    inv = np.array([], dtype=dtype).reshape(nside, 0)
+            evecs = evecs.self2np(srow=0, scol=ind, rank=0)  # (P_s)^H
+            # if ind < nside:
+            #     evecs = evecs.self2np(srow=0, scol=ind, rank=0)  # (P_s)^H
+            # else:
+            #     evecs = np.array([], dtype=dtype).reshape(0, nside)
+            inv = inv.self2np(srow=0, scol=ind, rank=0) # P_(-s)
+            # if self.inverse:
+            #     if ind < nside:
+            #         inv = inv.self2np(srow=0, scol=ind, rank=0) # P_(-s)
+            #     else:
+            #         inv = np.array([], dtype=dtype).reshape(nside, 0)
         else:
             if rank0:
                 # Construct the foreground removed subset of the space
@@ -147,9 +149,10 @@ class DoubleKL(kltransform.KLTransform):
                 inv = np.dot(inv, inv2) # P_(-s) Q^-1
 
         if comm is not None:
+            evals = comm.bcast(evals, root=0)
             comm.Barrier()
 
-        return evals, evecs, inv, evextra
+        return evals, evecs, inv, evextra, False
 
 
     def _ev_save_hook(self, f, evextra):
