@@ -673,13 +673,13 @@ class KLTransform(config.Reader):
                 # evecs = evecs[:, i_ev:].H # P_s or R=(Q_t P_s)
                 # evecs = evecs.to_global_array(rank=0)
                 # NOTE: must use self2np, since [] is global operation on MPI_COMM_WORLD
-                evecs = evecs.self2np(srow=0, scol=i_ev, rank=0) # rank0 has (P_s)^H or R^H = (Q_t P_s)^H, other rank has None
+                evecs = evecs.self2np(srow=0, scol=i_ev, block_shape=(20000, 20000), rank=0) # rank0 has (P_s)^H or R^H = (Q_t P_s)^H, other rank has None
                 if rank0:
                     evecs = evecs.T.conj() # P_s or R=(Q_t P_s)
                 if self.inverse:
                     # inv = inv[:, i_ev:] # P_(-s) or (P_(-s) Q_(-t))
                     # inv = inv.to_global_array(rank=0)
-                    inv = inv.self2np(srow=0, scol=i_ev, rank=0) # P_(-s) or (P_(-s) Q_(-t))
+                    inv = inv.self2np(srow=0, scol=i_ev, block_shape=(20000, 20000), rank=0) # P_(-s) or (P_(-s) Q_(-t))
             else:
                 if rank0:
                     evecs = evecs[:, i_ev:].T.conj() # P_s or R=(Q_t P_s)

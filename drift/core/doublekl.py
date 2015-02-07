@@ -112,12 +112,12 @@ class DoubleKL(kltransform.KLTransform):
             # copy to numpy array
             evals = evals[ind:]
             dtype = evecs.dtype
-            evecs = evecs.self2np(srow=0, scol=ind, rank=0)  # (P_s)^H
+            evecs = evecs.self2np(srow=0, scol=ind, block_shape=(20000, 20000), rank=0)  # (P_s)^H
             # if ind < nside:
             #     evecs = evecs.self2np(srow=0, scol=ind, rank=0)  # (P_s)^H
             # else:
             #     evecs = np.array([], dtype=dtype).reshape(0, nside)
-            inv = inv.self2np(srow=0, scol=ind, rank=0) # P_(-s)
+            inv = inv.self2np(srow=0, scol=ind, block_shape=(20000, 20000), rank=0) # P_(-s)
             # if self.inverse:
             #     if ind < nside:
             #         inv = inv.self2np(srow=0, scol=ind, rank=0) # P_(-s)

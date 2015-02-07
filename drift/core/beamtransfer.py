@@ -1346,7 +1346,7 @@ class BeamTransfer(object):
 
                 # copy the local matrix to the corresponding section of the distributed matrix
                 for i in range(comm.size):
-                    gmatf = gmatf.np2self(matf, starts[i][0], starts[i][1], rank=i)
+                    gmatf = gmatf.np2self(matf, starts[i][0], starts[i][1], block_shape=(20000, 20000), rank=i)
 
 
                 ##----------------------------------------------
