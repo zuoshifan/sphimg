@@ -372,7 +372,7 @@ class BeamTransfer(object):
 
         mpiutil.barrier()
 
-        if self.telescope == None and mpiutil.rank0:
+        if self.telescope is None and mpiutil.rank0:
             print "Attempting to read telescope from disk..."
 
             try:
@@ -2378,7 +2378,7 @@ class BeamTransferNoSVD(BeamTransfer):
 
         mpiutil.barrier()
 
-        if self.telescope == None and mpiutil.rank0:
+        if self.telescope is None and mpiutil.rank0:
             print "Attempting to read telescope from disk..."
 
             try:
