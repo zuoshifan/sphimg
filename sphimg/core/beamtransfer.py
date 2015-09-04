@@ -1,6 +1,6 @@
 """
 ========================================================
-Beam Transfer Matrices (:mod:`~drift.core.beamtransfer`)
+Beam Transfer Matrices (:mod:`~sphimg.core.beamtransfer`)
 ========================================================
 
 A class for calculating and managing Beam Transfer matrices
@@ -28,8 +28,8 @@ import numpy as np
 import scipy.linalg as la
 import h5py
 
-from drift.util import mpiutil, util, blockla
-from drift.core import kltransform
+from sphimg.util import mpiutil, util, blockla
+from sphimg.core import kltransform
 
 from scalapy import core
 
@@ -171,7 +171,7 @@ class BeamTransfer(object):
     ----------
     directory : string
         Path of directory to read and write Beam Transfers from.
-    telescope : drift.core.telescope.TransitTelescope, optional
+    telescope : sphimg.core.telescope.TransitTelescope, optional
         Telescope object to use for calculation. If `None` (default), try to
         load a cached version from the given directory.
 
@@ -1113,6 +1113,21 @@ class BeamTransfer(object):
         return vecb
 
     project_vector_backward = project_vector_telescope_to_sky
+
+
+    def project_vector_telescope_to_sky_full(self, vec, rank_ratio, lcut):
+        npol = self.telescope.num_pol_sky
+        lside = self.telescope.lmax + 1
+        nlms = lside * (lside + 1) / 2
+        beam = np.zeros((self.nfreq, 2, self.ntel/2, npol, nlms), dtype=self.beam_m(0).dtype)
+        for mi in range(lside):
+            s = mi*lside + mi*(mi-1)/2
+            e = (mi+1)*lside + mi*(mi+1)/2
+            beam[..., s:e] = self.beam_m(mi)
+        beam = beam.reshape(self.nfreq, self.ntel, npol*nlms)
+
+        vecb = np.zeros((self.nfreq, npol, nlms), dtype=np.complex128)
+        vec = vec.reshape((self.nfreq, self.ntel))
 
 
     # def project_vector_backward_dirty(self, mi, vec):

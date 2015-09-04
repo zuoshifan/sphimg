@@ -1,9 +1,9 @@
 import numpy as np
 
-from drift.core import telescope
-from drift.telescope import cylinder, cylbeam
-from drift.util import config
-from drift.util import typeutil
+from sphimg.core import telescope
+from sphimg.telescope import cylinder, cylbeam
+from sphimg.util import config
+from sphimg.util import typeutil
 
 
 class RandomCylinder(cylinder.UnpolarisedCylinderTelescope):

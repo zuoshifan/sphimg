@@ -2,11 +2,11 @@ import os.path
 
 import yaml
 
-from drift.util import mpiutil
-from drift.core import manager
-from drift.util import config
-from drift.util import typeutil
-from drift.pipeline import timestream
+from sphimg.util import mpiutil
+from sphimg.core import manager
+from sphimg.util import config
+from sphimg.util import typeutil
+from sphimg.pipeline import timestream
 
 
 def fixpath(path):

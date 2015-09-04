@@ -4,14 +4,14 @@ import warnings
 
 import yaml
 
-from drift.util import mpiutil
+from sphimg.util import mpiutil
 
-from drift.telescope import cylinder, gmrt, focalplane, restrictedcylinder, exotic_cylinder
-from drift.core import beamtransfer
+from sphimg.telescope import cylinder, gmrt, focalplane, restrictedcylinder, exotic_cylinder
+from sphimg.core import beamtransfer
 
-from drift.core import kltransform, doublekl
-from drift.core import psestimation, psmc, crosspower
-from drift.core import skymodel
+from sphimg.core import kltransform, doublekl
+from sphimg.core import psestimation, psmc, crosspower
+from sphimg.core import skymodel
 
 
 

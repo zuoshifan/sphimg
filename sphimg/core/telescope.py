@@ -4,9 +4,9 @@ import numpy as np
 
 from cora.util import hputil, units
 
-from drift.core import visibility
-from drift.util import util, config
-from drift.util import typeutil
+from sphimg.core import visibility
+from sphimg.util import util, config
+from sphimg.util import typeutil
 
 
 def in_range(arr, min, max):
@@ -171,6 +171,7 @@ class TransitTelescope(config.Reader):
     ndays = config.Property(proptype=typeutil.positive_int, default=733)
 
     accuracy_boost = config.Property(proptype=typeutil.positive_float, default=1.0)
+    maxl = config.Property(proptype=typeutil.none_or_positive_int, default=None)
     l_boost = config.Property(proptype=typeutil.positive_float, default=1.0)
 
     minlength = config.Property(proptype=typeutil.nonnegative_float, default=0.0)
@@ -357,13 +358,21 @@ class TransitTelescope(config.Reader):
     def lmax(self):
         """The maximum l the telescope is sensitive to."""
         lmax, mmax = max_lm(self.baselines, self.wavelengths[-1], self.u_width, self.v_width)
-        return int(np.ceil(lmax.max() * self.l_boost))
+        lmax = int(np.ceil(lmax.max() * self.l_boost))
+        if self.maxl:
+            return min(lmax, self.maxl)
+        else:
+            return lmax
 
     @property
     def mmax(self):
         """The maximum m the telescope is sensitive to."""
         lmax, mmax = max_lm(self.baselines, self.wavelengths[-1], self.u_width, self.v_width)
-        return int(np.ceil(mmax.max() * self.l_boost))
+        mmax = int(np.ceil(mmax.max() * self.l_boost))
+        if self.maxl:
+            return self.lmax
+        else:
+            return mmax
 
     #===================================================
 
@@ -596,7 +605,8 @@ class TransitTelescope(config.Reader):
         # order, calculating the transfer matrices
         for iflat in np.argsort(lmax.flat):
             ind = np.unravel_index(iflat, lmax.shape)
-            trans = self._transfer_single(bl_indices[ind], f_indices[ind], lmax[ind], lside)
+            # trans = self._transfer_single(bl_indices[ind], f_indices[ind], lmax[ind], lside)
+            trans = self._transfer_single(bl_indices[ind], f_indices[ind], lside, lside)
 
             ## Iterate over pol combinations and copy into transfer array
             for pi in range(self.num_pol_sky):

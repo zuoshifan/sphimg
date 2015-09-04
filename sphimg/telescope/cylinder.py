@@ -1,10 +1,10 @@
 
 import numpy as np
 
-from drift.core import telescope
-from drift.util import config
-from drift.util import typeutil
-from drift.telescope import cylbeam
+from sphimg.core import telescope
+from sphimg.util import config
+from sphimg.util import typeutil
+from sphimg.telescope import cylbeam
 
 
 

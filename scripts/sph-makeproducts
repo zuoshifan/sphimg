@@ -3,31 +3,35 @@
 import argparse
 
 
+products = None
+
+
 def run_config(args):
-    from drift.pipeline import pipeline
+    from sphimg.core import manager
 
-    pl = pipeline.PipelineManager.from_configfile(args.configfile)
-    pl.simulate()
-    pl.generate()
+    m = manager.ProductManager.from_config(args.configfile)
+    m.generate()
 
-pipe = None
+
 def interactive_config(args):
-    from drift.pipeline import pipeline
+    from sphimg.core import manager
 
-    global pipe
-    pipe = pipeline.PipelineManager.from_configfile(args.configfile)
+    global products
+    products = manager.ProductManager.from_config(args.configfile)
+
+    print "*** Access analysis products through the global variable `products` ***"
 
 
 
 
 def queue_config(args):
 
-    import os
     import os.path
     import shutil
     import yaml
 
-    yconf = yaml.safe_load(args.configfile)
+    with open(args.configfile, 'r') as f:
+        yconf = yaml.safe_load(f)
 
     ## Global configuration
     ## Create output directory and copy over params file.
@@ -49,17 +53,15 @@ def queue_config(args):
         os.makedirs(pbsdir)
 
     # Copy config file into output directory (check it's not already there first)
-    sfile = os.path.realpath(os.path.abspath(args.configfile.name))
+    sfile = os.path.realpath(os.path.abspath(args.configfile))
     dfile = os.path.realpath(os.path.abspath(pbsdir + '/config.yaml'))
 
     if sfile != dfile:
         shutil.copy(sfile, dfile)
 
-
     conf['mpiproc'] = conf['nodes'] * conf['pernode']
     conf['pbsdir'] = pbsdir
     conf['scriptpath'] = os.path.realpath(__file__)
-
 
     script="""#!/bin/bash
 #PBS -l nodes=%(nodes)i:ppn=%(ppn)i
@@ -90,29 +92,26 @@ mpirun --mca btl self,sm,tcp -np %(mpiproc)i -npernode %(pernode)i python %(scri
 
 
 
-parser = argparse.ArgumentParser(description='Run/queue the pipeline to analyse a timestream.')
+
+parser = argparse.ArgumentParser(description='Create/load the analysis products.')
 subparsers = parser.add_subparsers(help='Command to run.', title="Commands", metavar="<command>")
 
 
-parser_run = subparsers.add_parser('run', help='Run the analysis from the given config file.')
+parser_run = subparsers.add_parser('run', help='Make the analysis products from the given config file.')
 parser_run.add_argument('configfile', type=str, help='Configuration file to use.')
 parser_run.set_defaults(func=run_config)
 
-
-parser_interactive = subparsers.add_parser('interactive', help='Interactive analysis with the given config file.')
+parser_interactive = subparsers.add_parser('interactive', help='Load the analysis products for interactive use.')
 parser_interactive.add_argument('configfile', type=str, help='Configuration file to use.')
 parser_interactive.set_defaults(func=interactive_config)
 
 
-parser_queue = subparsers.add_parser('queue', help='Create a jobscript for running the pipeline and add to the PBS queue.')
-parser_queue.add_argument('configfile', type=argparse.FileType('r'), help='Configuration file to use.')
+parser_queue = subparsers.add_parser('queue', help='Create a jobscript for creating the products and add to the PBS queue.')
+parser_queue.add_argument('configfile', type=str, help='Configuration file to use.')
 parser_queue.add_argument('--nosubmit', action='store_true', help='Don\'t submit the job to the queue.')
 parser_queue.set_defaults(func=queue_config)
 
 args = parser.parse_args()
 args.func(args)
-
-
-
 
 

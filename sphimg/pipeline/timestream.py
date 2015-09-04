@@ -12,8 +12,8 @@ import numpy as np
 
 from cora.util import hputil
 
-from drift.core import manager, kltransform
-from drift.util import util, mpiutil
+from sphimg.core import manager, kltransform
+from sphimg.util import util, mpiutil
 
 
 def smoothalm(alms, fwhm=0.0, sigma=None, invert=False, mmax=None, verbose=True, inplace=True):
@@ -74,7 +74,7 @@ class Timestream(object):
         ----------
         tsdir : string
             Directory to create the Timestream in.
-        prodmanager : drift.core.manager.ProductManager
+        prodmanager : sphimg.core.manager.ProductManager
             ProductManager object containing the analysis products.
         """
         self.directory = os.path.abspath(tsdir)
