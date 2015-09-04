@@ -593,11 +593,11 @@ class TransitTelescope(config.Reader):
         lmax, mmax = np.ceil(self.l_boost * np.array(max_lm(self.baselines[bl_indices], self.wavelengths[f_indices], self.u_width, self.v_width))).astype(np.int64)
         #lmax, mmax = lmax * self.l_boost, mmax * self.l_boost
         # Set the size of the (l,m) array to write into
-        lside = self.lmax if global_lmax else lmax.max()
+        lside = self.lmax + 1 if global_lmax else lmax.max() + 1
 
         # Generate the array for the Transfer functions
 
-        tshape = bl_indices.shape + (self.num_pol_sky, lside+1, 2*lside+1)
+        tshape = bl_indices.shape + (self.num_pol_sky, lside, 2*lside - 1)
         print "Size: %i elements. Memory %f GB." % (np.prod(tshape), 2*np.prod(tshape) * 8.0 / 2**30)
         tarray = np.zeros(tshape, dtype=np.complex128)
 
@@ -605,8 +605,8 @@ class TransitTelescope(config.Reader):
         # order, calculating the transfer matrices
         for iflat in np.argsort(lmax.flat):
             ind = np.unravel_index(iflat, lmax.shape)
-            # trans = self._transfer_single(bl_indices[ind], f_indices[ind], lmax[ind], lside)
-            trans = self._transfer_single(bl_indices[ind], f_indices[ind], lside, lside)
+            # trans = self._transfer_single(bl_indices[ind], f_indices[ind], lmax[ind], lside - 1)
+            trans = self._transfer_single(bl_indices[ind], f_indices[ind], lside - 1, lside - 1)
 
             ## Iterate over pol combinations and copy into transfer array
             for pi in range(self.num_pol_sky):
@@ -877,7 +877,8 @@ class UnpolarisedTelescope(TransitTelescope):
         cvis = self._beam_map_single(bl_index, f_index)
 
         # Perform the harmonic transform to get the transfer matrix (conj is correct - see paper)
-        btrans = hputil.sphtrans_complex(cvis.conj(), centered = False, lmax = lmax, lside=lside).conj()
+        # btrans = hputil.sphtrans_complex(cvis.conj(), centered = False, lmax = lmax, lside=lside).conj()
+        btrans = hputil.sphtrans_complex(cvis.conj(), centered = True, lmax = lmax, lside=lside).conj()
 
         return [ btrans ]
 
@@ -968,7 +969,8 @@ class PolarisedTelescope(TransitTelescope):
 
         bmap = self._beam_map_single(bl_index, f_index)
 
-        btrans = [ pb.conj() for pb in hputil.sphtrans_complex_pol([bm.conj() for bm in bmap], centered = False, lmax = int(lmax), lside=lside) ]
+        # btrans = [ pb.conj() for pb in hputil.sphtrans_complex_pol([bm.conj() for bm in bmap], centered = False, lmax = int(lmax), lside=lside) ]
+        btrans = [ pb.conj() for pb in hputil.sphtrans_complex_pol([bm.conj() for bm in bmap], centered = True, lmax = int(lmax), lside=lside) ]
 
         return btrans
 
