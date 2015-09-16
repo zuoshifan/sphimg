@@ -133,6 +133,15 @@ class Timestream(object):
         return ntime
 
 
+    @property
+    def tphi(self):
+        """Get phi angeles."""
+        with h5py.File(self._fcommondata_file, 'r') as f:
+            tphi = f['phi'][:]
+
+        return tphi
+
+
     def timestream_f(self, fi):
         """Fetch the timestream for a given frequency.
 
@@ -501,6 +510,57 @@ class Timestream(object):
         if mpiutil.rank0:
             skymap = hputil.sphtrans_inv_sky(alm, nside)
 
+            # Make directory for maps file
+            if not os.path.exists(self._mapsdir):
+                os.makedirs(self._mapsdir)
+
+            # save map
+            with h5py.File(mapfile, 'w') as f:
+                f.create_dataset('/map', data=skymap)
+
+        mpiutil.barrier()
+
+
+    def mapmake(self, nside, phi_inds, maptype):
+        mapfile = self._mapsdir + 'map_%s.hdf5' % maptype
+        almfile = self._almsdir + 'alm_%s.hdf5' % maptype
+
+        if os.path.exists(mapfile):
+            if mpiutil.rank0:
+                print "File %s exists. Skipping..." % mapfile
+            mpiutil.barrier()
+            return
+        elif os.path.exists(almfile):
+            if mpiutil.rank0:
+                print "File %s exists. Read from it..." % almfile
+                with h5py.File(almfile, 'r') as f:
+                    alm = f['alm'][...]
+            else:
+                alm = None
+        else:
+            if mpiutil.rank0:
+                tel = self.telescope
+                nfreq = tel.nfreq
+                phi_inds = list(set(phi_inds) & set(range(self.ntime)))
+                phis = self.tphi[phi_inds]
+                nphi = phis.shape[0]
+                tstream = np.zeros((nfreq, tel.nbase, nphi), dtype=np.complex128)
+                for fi in range(nfreq):
+                    tstream[fi] = self.timestream_f(fi)[:, phi_inds]
+                sum_ts = np.sum(tstream, axis=-1)
+
+                alms = self.beamtransfer.project_vector_telescope_to_sky_full(sum_ts, phis)
+
+                # Make directory for alms file
+                if not os.path.exists(self._almsdir):
+                    os.makedirs(self._almsdir)
+
+                # Save alm
+                with h5py.File(almfile, 'w') as f:
+                    f.create_dataset('/alm', data=alms)
+
+        if mpiutil.rank0:
+            skymap = hputil.sphtrans_inv_sky(alms, nside)
             # Make directory for maps file
             if not os.path.exists(self._mapsdir):
                 os.makedirs(self._mapsdir)

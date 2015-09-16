@@ -224,15 +224,15 @@ class BeamTransfer(object):
         # File to save telescope frequencies and baselines
         return self.directory + '/telescope_data.hdf5'
 
-    # @property
-    # def _mdir(self):
-    #     # Directory to save `m` ordered beam transfer matrix files
-    #     return self.directory + '/beam_m/'
+    @property
+    def _mdir(self):
+        # Directory to save `m` ordered beam transfer matrix files
+        return self.directory + '/beam_m/'
 
-    # def _mfile(self, mi):
-    #     # Pattern to form the `m` ordered beam transfer matrix file
-    #     pat = self._mdir + 'beam_%s.hdf5' % util.natpattern(self.telescope.mmax)
-    #     return pat % abs(mi)
+    def _mfile(self, mi):
+        # Pattern to form the `m` ordered beam transfer matrix file
+        pat = self._mdir + 'beam_%s.hdf5' % util.natpattern(self.telescope.mmax)
+        return pat % abs(mi)
 
     @property
     def _ldir(self):
@@ -304,6 +304,42 @@ class BeamTransfer(object):
 
     #===================================================
 
+
+
+    #====== Loading l-order beams ======================
+
+    def _load_beam_l(self, li, fi=None):
+        ## Read in beam from disk
+        with h5py.File(self._lfile(li), 'r') as lfile:
+
+            # If fi is None, return all frequency blocks. Otherwise just the one requested.
+            if fi is None:
+                beam = lfile['beam_l'][:]
+            else:
+                beam = lfile['beam_l'][fi][:]
+
+        return beam
+
+
+    @util.cache_last
+    def beam_l(self, li, fi=None):
+        """Fetch the meam transfer matrix for a given l.
+
+        Parameters
+        ----------
+        li : integer
+            l-mode to fetch.
+        fi : integer
+            frequency block to fetch. fi=None (default) returns all.
+
+        Returns
+        -------
+        beam : np.ndarray (nfreq, npairs, npol_sky, 2*li+1)
+        """
+
+        return self._load_beam_l(li, fi=fi)
+
+    #===================================================
 
 
     #====== Loading m-order beams ======================
@@ -602,7 +638,7 @@ class BeamTransfer(object):
         self._generate_teldatafile(regen)
 
         st = time.time()
-        # self._generate_mfiles(regen)
+        self._generate_mfiles(regen)
         self._generate_lfiles(regen)
         et = time.time()
         if mpiutil.rank0:
@@ -644,6 +680,10 @@ class BeamTransfer(object):
             # Create directories for storing frequency ordered beams
             # if not os.path.exists(self._fdir):
             #     os.makedirs(self._fdir)
+
+            # Create directories for m beams
+            if not os.path.exists(self._mdir):
+                os.makedirs(self._mdir)
 
             # Create directories for l beams
             if not os.path.exists(self._ldir):
@@ -727,126 +767,126 @@ class BeamTransfer(object):
         mpiutil.barrier()
 
 
-    # def _generate_mfiles(self, regen=False):
+    def _generate_mfiles(self, regen=False):
 
-    #     completed_file = self._mdir + 'COMPLETED_BEAM'
-    #     if os.path.exists(completed_file) and not regen:
-    #         if mpiutil.rank0:
-    #             print
-    #             print '=' * 80
-    #             print "******* Beam transfer m-files already generated ********"
-    #         mpiutil.barrier()
-    #         return
+        completed_file = self._mdir + 'COMPLETED_BEAM'
+        if os.path.exists(completed_file) and not regen:
+            if mpiutil.rank0:
+                print
+                print '=' * 80
+                print "******* Beam transfer m-files already generated ********"
+            mpiutil.barrier()
+            return
 
-    #     if mpiutil.rank0:
-    #         print
-    #         print '=' * 80
-    #         print 'Create beam transfer m-files...'
+        if mpiutil.rank0:
+            print
+            print '=' * 80
+            print 'Create beam transfer m-files...'
 
-    #     st = time.time()
+        st = time.time()
 
-    #     nfb = self.telescope.nfreq * self.telescope.nbase
-    #     fbmap = np.mgrid[:self.telescope.nfreq, :self.telescope.nbase].reshape(2, nfb)
+        nfb = self.telescope.nfreq * self.telescope.nbase
+        fbmap = np.mgrid[:self.telescope.nfreq, :self.telescope.nbase].reshape(2, nfb)
 
-    #     # Calculate the number of baselines to deal with at any one time. Aim
-    #     # to have a maximum of `self._mem_switch` GB in memory at any one time
-    #     fbsize = self.telescope.num_pol_sky * (self.telescope.lmax+1) * (2*self.telescope.mmax+1) * 16.0
+        # Calculate the number of baselines to deal with at any one time. Aim
+        # to have a maximum of `self._mem_switch` GB in memory at any one time
+        fbsize = self.telescope.num_pol_sky * (self.telescope.lmax+1) * (2*self.telescope.mmax+1) * 16.0
 
-    #     nodemem = self._mem_switch * 2**30.0
+        nodemem = self._mem_switch * 2**30.0
 
-    #     num_fb_per_node = int(nodemem / fbsize)
-    #     num_fb_per_chunk = num_fb_per_node * mpiutil.size
-    #     num_chunks = int(np.ceil(1.0 * nfb / num_fb_per_chunk))  # Number of chunks to break the calculation into
+        num_fb_per_node = int(nodemem / fbsize)
+        num_fb_per_chunk = num_fb_per_node * mpiutil.size
+        num_chunks = int(np.ceil(1.0 * nfb / num_fb_per_chunk))  # Number of chunks to break the calculation into
 
-    #     if mpiutil.rank0:
-    #         print "Splitting into %i chunks...." % num_chunks
+        if mpiutil.rank0:
+            print "Splitting into %i chunks...." % num_chunks
 
-    #     # The local m sections
-    #     lm, sm, em = mpiutil.split_local(self.telescope.mmax+1)
+        # The local m sections
+        lm, sm, em = mpiutil.split_local(self.telescope.mmax+1)
 
-    #     # Iterate over all m's and create the hdf5 files we will write into.
-    #     for mi in mpiutil.mpirange(self.telescope.mmax + 1):
+        # Iterate over all m's and create the hdf5 files we will write into.
+        for mi in mpiutil.mpirange(self.telescope.mmax + 1):
 
-    #         # don't save all zero values for `l` < `m` to save disk space
-    #         dsize = (self.telescope.nfreq, 2, self.telescope.nbase, self.telescope.num_pol_sky, self.telescope.lmax+1 - mi)
-    #         csize = (1, 2, min(10, self.telescope.nbase), self.telescope.num_pol_sky, self.telescope.lmax+1 - mi)
+            # don't save all zero values for `l` < `m` to save disk space
+            dsize = (self.telescope.nfreq, 2, self.telescope.nbase, self.telescope.num_pol_sky, self.telescope.lmax+1 - mi)
+            csize = (1, 2, min(10, self.telescope.nbase), self.telescope.num_pol_sky, self.telescope.lmax+1 - mi)
 
-    #         with h5py.File(self._mfile(mi), 'w') as f:
-    #             f.create_dataset('beam_m', dsize, chunks=csize, compression='lzf', dtype=np.complex128)
-    #             # Write useful attributes.
-    #             f.attrs['m'] = mi
+            with h5py.File(self._mfile(mi), 'w') as f:
+                f.create_dataset('beam_m', dsize, chunks=csize, compression='lzf', dtype=np.complex128)
+                # Write useful attributes.
+                f.attrs['m'] = mi
 
-    #     mpiutil.barrier()
+        mpiutil.barrier()
 
-    #     # Iterate over chunks
-    #     for ci, fbrange in enumerate(mpiutil.split_m(nfb, num_chunks).T):
+        # Iterate over chunks
+        for ci, fbrange in enumerate(mpiutil.split_m(nfb, num_chunks).T):
 
-    #         if mpiutil.rank0:
-    #             print "Starting chunk %i of %i" % (ci+1, num_chunks)
+            if mpiutil.rank0:
+                print "Starting chunk %i of %i" % (ci+1, num_chunks)
 
-    #         # Unpack freq-baselines range into num, start and end
-    #         fbnum, fbstart, fbend = fbrange
+            # Unpack freq-baselines range into num, start and end
+            fbnum, fbstart, fbend = fbrange
 
-    #         # Split the fb list into the ones local to this node
-    #         loc_num, loc_start, loc_end = mpiutil.split_local(fbnum)
-    #         fb_ind = range(fbstart + loc_start, fbstart + loc_end)
+            # Split the fb list into the ones local to this node
+            loc_num, loc_start, loc_end = mpiutil.split_local(fbnum)
+            fb_ind = range(fbstart + loc_start, fbstart + loc_end)
 
-    #         # Extract the local frequency and baselines indices
-    #         f_ind = fbmap[0, fb_ind]
-    #         bl_ind = fbmap[1, fb_ind]
+            # Extract the local frequency and baselines indices
+            f_ind = fbmap[0, fb_ind]
+            bl_ind = fbmap[1, fb_ind]
 
-    #         # Create array to hold local matrix section
-    #         fb_array = np.zeros((loc_num, 2, self.telescope.num_pol_sky, self.telescope.lmax+1, self.telescope.mmax+1), dtype=np.complex128)
+            # Create array to hold local matrix section
+            fb_array = np.zeros((loc_num, 2, self.telescope.num_pol_sky, self.telescope.lmax+1, self.telescope.mmax+1), dtype=np.complex128)
 
-    #         if loc_num > 0:
+            if loc_num > 0:
 
-    #             # Calculate the local Beam Matrices
-    #             tarray = self.telescope.transfer_matrices(bl_ind, f_ind)
+                # Calculate the local Beam Matrices
+                tarray = self.telescope.transfer_matrices(bl_ind, f_ind)
 
-    #             # Expensive memory copy into array section
-    #             for mi in range(1, self.telescope.mmax+1):
-    #                 fb_array[:, 0, ..., mi] = tarray[..., mi]
-    #                 fb_array[:, 1, ..., mi] = (-1)**mi * tarray[..., -mi].conj()
+                # Expensive memory copy into array section
+                for mi in range(1, self.telescope.mmax+1):
+                    fb_array[:, 0, ..., mi] = tarray[..., mi]
+                    fb_array[:, 1, ..., mi] = (-1)**mi * tarray[..., -mi].conj()
 
-    #             fb_array[:, 0, ..., 0] = tarray[..., 0]
+                fb_array[:, 0, ..., 0] = tarray[..., 0]
 
-    #             del tarray
+                del tarray
 
-    #         if mpiutil.rank0:
-    #             print "Transposing and writing chunk."
+            if mpiutil.rank0:
+                print "Transposing and writing chunk."
 
-    #         # Perform an in memory MPI transpose to get the m-ordered array
-    #         m_array = mpiutil.transpose_blocks(fb_array, (fbnum, 2, self.telescope.num_pol_sky, self.telescope.lmax + 1, self.telescope.mmax + 1))
+            # Perform an in memory MPI transpose to get the m-ordered array
+            m_array = mpiutil.transpose_blocks(fb_array, (fbnum, 2, self.telescope.num_pol_sky, self.telescope.lmax + 1, self.telescope.mmax + 1))
 
-    #         del fb_array
+            del fb_array
 
-    #         # Write out the current set of chunks into the m-files.
-    #         for lmi, mi in enumerate(range(sm, em)):
+            # Write out the current set of chunks into the m-files.
+            for lmi, mi in enumerate(range(sm, em)):
 
-    #             # Open up correct m-file
-    #             with h5py.File(self._mfile(mi), 'r+') as mfile:
+                # Open up correct m-file
+                with h5py.File(self._mfile(mi), 'r+') as mfile:
 
-    #                 # Lookup where to write Beam Transfers and write into file.
-    #                 for fbl, fbi in enumerate(range(fbstart, fbend)):
-    #                     fi = fbmap[0, fbi]
-    #                     bi = fbmap[1, fbi]
-    #                     # mfile['beam_m'][fi, :, bi] = m_array[fbl, ..., lmi]
-    #                     mfile['beam_m'][fi, :, bi] = m_array[fbl, ..., mi:, lmi] # noly save l >= m
+                    # Lookup where to write Beam Transfers and write into file.
+                    for fbl, fbi in enumerate(range(fbstart, fbend)):
+                        fi = fbmap[0, fbi]
+                        bi = fbmap[1, fbi]
+                        # mfile['beam_m'][fi, :, bi] = m_array[fbl, ..., lmi]
+                        mfile['beam_m'][fi, :, bi] = m_array[fbl, ..., mi:, lmi] # noly save l >= m
 
-    #         del m_array
+            del m_array
 
-    #     mpiutil.barrier()
+        mpiutil.barrier()
 
-    #     et = time.time()
+        et = time.time()
 
-    #     if mpiutil.rank0:
-    #         # Make file marker that the m's have been correctly generated:
-    #         open(completed_file, 'a').close()
+        if mpiutil.rank0:
+            # Make file marker that the m's have been correctly generated:
+            open(completed_file, 'a').close()
 
-    #         # Print out timing
-    #         print "=== MPI transpose took %f s ===" % (et - st)
+            # Print out timing
+            print "=== MPI transpose took %f s ===" % (et - st)
 
-    #     mpiutil.barrier()
+        mpiutil.barrier()
 
 
     def _generate_lfiles(self, regen=False):
@@ -1246,19 +1286,49 @@ class BeamTransfer(object):
     project_vector_backward = project_vector_telescope_to_sky
 
 
-    def project_vector_telescope_to_sky_full(self, vec, rank_ratio, lcut):
+    def project_vector_telescope_to_sky_full(self, vec, phis):
         npol = self.telescope.num_pol_sky
         lside = self.telescope.lmax + 1
-        nlms = lside * (lside + 1) / 2
-        beam = np.zeros((self.nfreq, 2, self.ntel/2, npol, nlms), dtype=self.beam_m(0).dtype)
-        for mi in range(lside):
-            s = mi*lside + mi*(mi-1)/2
-            e = (mi+1)*lside + mi*(mi+1)/2
-            beam[..., s:e] = self.beam_m(mi)
-        beam = beam.reshape(self.nfreq, self.ntel, npol*nlms)
+        nlms = lside**2
+        beam = np.zeros((self.nfreq, self.nbase, npol, nlms), dtype=self.beam_m(0).dtype)
+        for li in range(lside):
+            s = li**2
+            e = (li + 1)**2
+            beam[..., s:e] = self.beam_l(li)
+        beam = beam.reshape(self.nfreq, self.nbase, npol*nlms)
 
-        vecb = np.zeros((self.nfreq, npol, nlms), dtype=np.complex128)
-        vec = vec.reshape((self.nfreq, self.ntel))
+        # vecb = np.zeros((self.nfreq, npol, nlms), dtype=np.complex128)
+        vecb = np.zeros((self.nfreq, npol, lside, lside), dtype=np.complex128)
+
+        for fi in range(self.nfreq):
+            print 'Map-making for freq: %d of %d...' % (fi, self.nfreq)
+            if self.noise_weight:
+                noisew = self.telescope.noisepower(np.arange(self.nbase), fi).flatten()**(-0.5)
+                beam[fi] = beam[fi] * noisew[:, np.newaxis]
+                vec[fi] = vec[fi] * noisew
+
+            print 'Start dot...'
+            lhs = np.dot(beam[fi].T.conj(), beam[fi])
+            print 'Dot done.'
+            for li in range(lside):
+                for mi in range(-li, li+1):
+                    sum_ephi = np.sum(np.exp(1.0J * mi * phis))
+                    lhs[li**2+li+mi] = lhs[li**2+li+mi] * sum_ephi
+            print 'Start dot...'
+            rhs = np.dot(beam[fi].T.conj(), vec[fi])
+            print 'Dot done.'
+
+            print 'Start solve...'
+            x, resids, rank, s = la.lstsq(lhs, rhs, cond=1e-6)
+            print 'Solve done.'
+            x = x.reshape(npol, nlms)
+
+            for li in range(lside):
+                for mi in range(0, li+1):
+                    # vecb[fi, :, li, mi] = 0.5 * (x[:, li**2+li+mi] + (-1)**mi * x[:, li**2+li-mi])
+                    vecb[fi, :, li, mi] = x[:, li**2+li+mi]
+
+        return vecb
 
 
     # def project_vector_backward_dirty(self, mi, vec):
@@ -1719,6 +1789,10 @@ class BeamTransfer(object):
     #===================================================
 
     #====== Dimensionality of the various spaces =======
+    @property
+    def nbase(self):
+       """The number of unique baselines."""
+       return self.telescope.nbase
 
     @property
     def ntel(self):

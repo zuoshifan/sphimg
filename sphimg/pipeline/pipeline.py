@@ -64,6 +64,8 @@ class PipelineManager(config.Reader):
     generate_svd_map = config.Property(proptype=bool, default=True)
     generate_kl_map = config.Property(proptype=bool, default=True)
 
+    phi_inds = config.Property(proptype=typeutil.non_empty_list, default=[0])
+
     no_m_zero = config.Property(proptype=bool, default=True)
 
     # Specific products to use.
@@ -180,7 +182,8 @@ class PipelineManager(config.Reader):
                     print '=' * 80
                     print "Generating full map (%s)..." % tsname
 
-                tsobj.mapmake_full(self.nside, 'full', self.fullmap_fwhm, rank_ratio=self.full_rank_ratio, lcut=self.full_lcut)
+                # tsobj.mapmake_full(self.nside, 'full', self.fullmap_fwhm, rank_ratio=self.full_rank_ratio, lcut=self.full_lcut)
+                tsobj.mapmake(self.nside, self.phi_inds, 'full')
 
 
             if self.generate_svdmodes:
