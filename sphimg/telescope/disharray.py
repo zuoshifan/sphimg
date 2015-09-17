@@ -3,7 +3,7 @@ import numpy as np
 from scipy.special import jn
 
 from cora.util import coord
-from drift.core import telescope
+from sphimg.core import telescope
 
 
 def jinc(x):

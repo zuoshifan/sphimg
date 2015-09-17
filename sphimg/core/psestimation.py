@@ -12,9 +12,9 @@ import scipy.linalg as la
 
 from cora.signal import corr21cm
 
-from drift.core import skymodel
-from drift.util import mpiutil, util, config
-from drift.util import typeutil
+from sphimg.core import skymodel
+from sphimg.util import mpiutil, util, config
+from sphimg.util import typeutil
 
 
 

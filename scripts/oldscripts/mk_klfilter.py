@@ -10,10 +10,10 @@ import healpy
 
 from cora.util import hputil
 
-from drift.telescope import cylinder
-from drift.core import beamtransfer
-from drift.core import kltransform
-from drift.util import mpiutil
+from sphimg.telescope import cylinder
+from sphimg.core import beamtransfer
+from sphimg.core import kltransform
+from sphimg.util import mpiutil
 from mpi4py import MPI
 
 ## Read arguments in.

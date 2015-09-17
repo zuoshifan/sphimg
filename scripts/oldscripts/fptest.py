@@ -1,4 +1,4 @@
-from drift.core import focalplane, beamtransfer, kltransform, psestimation
+from sphimg.core import focalplane, beamtransfer, kltransform, psestimation
 
 import healpy
 

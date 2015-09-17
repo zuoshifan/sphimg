@@ -6,7 +6,7 @@ import h5py
 import healpy
 
 from cora.util import hputil
-from drift.core import beamtransfer, blockla
+from sphimg.core import beamtransfer, blockla
 
 
 def rotate_phi(map, dphi):

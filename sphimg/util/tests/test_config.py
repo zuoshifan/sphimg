@@ -6,7 +6,7 @@ try:
 except ImportError:
    import pickle
 
-from drift.util import config
+from sphimg.util import config
 
 
 class Person(config.Reader):

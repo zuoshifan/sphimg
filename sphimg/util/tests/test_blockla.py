@@ -1,5 +1,5 @@
 
-from drift.core import blockla
+from sphimg.core import blockla
 
 import numpy as np
 

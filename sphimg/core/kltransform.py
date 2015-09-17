@@ -9,13 +9,13 @@ import h5py
 
 from cora.util import hputil
 
-from drift.util import mpiutil, util, config
-from drift.util import typeutil
-from drift.core import skymodel
+from sphimg.util import mpiutil, util, config
+from sphimg.util import typeutil
+from sphimg.core import skymodel
 
 from scalapy import core
 import scalapy.routines as rt
-from drift.util import scalapyutil as su
+from sphimg.util import scalapyutil as su
 
 
 # def collect_m_arrays(mlist, func, shapes, dtype):

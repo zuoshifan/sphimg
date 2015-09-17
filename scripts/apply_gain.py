@@ -7,9 +7,9 @@ Usage:
 import numpy as np
 import h5py
 
-from drift.core import manager
-from drift.pipeline import timestream
-from drift.util import mpiutil
+from sphimg.core import manager
+from sphimg.pipeline import timestream
+from sphimg.util import mpiutil
 
 from docopt import docopt
 

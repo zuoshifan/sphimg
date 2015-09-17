@@ -2,10 +2,10 @@ import numpy as np
 
 from cora.util import nputil
 
-from drift.core import psestimation
-from drift.util import config, mpiutil
-from drift.util import npcov
-from drift.util import typeutil
+from sphimg.core import psestimation
+from sphimg.util import config, mpiutil
+from sphimg.util import npcov
+from sphimg.util import typeutil
 
 
 class PSMonteCarlo(psestimation.PSEstimation):

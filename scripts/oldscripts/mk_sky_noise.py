@@ -4,8 +4,8 @@ import numpy as np
 import h5py
 
 from cora.util import hputil
-from drift.core import beamtransfer
-from drift.util import mpiutil
+from sphimg.core import beamtransfer
+from sphimg.util import mpiutil
 
 btdir = sys.argv[1]
 nside = int(sys.argv[2])

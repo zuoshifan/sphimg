@@ -3,9 +3,9 @@ import numpy as np
 from scipy.special import jn
 
 from cora.util import coord, units
-from drift.core import telescope
-from drift.util import util, config
-from drift.util import typeutil
+from sphimg.core import telescope
+from sphimg.util import util, config
+from sphimg.util import typeutil
 
 
 def jinc(x):

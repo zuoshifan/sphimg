@@ -1,8 +1,8 @@
 import numpy as np
 
-from drift.util import mpiutil
-from drift.util import npcov
-from drift.core import psmc
+from sphimg.util import mpiutil
+from sphimg.util import npcov
+from sphimg.core import psmc
 
 
 class CrossPower(psmc.PSMonteCarlo):

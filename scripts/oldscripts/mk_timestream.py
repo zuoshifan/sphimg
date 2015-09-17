@@ -1,7 +1,7 @@
 import argparse
 
-from drift.core import manager
-from drift.pipeline import timestream
+from sphimg.core import manager
+from sphimg.pipeline import timestream
 
 
 ## Read arguments in.

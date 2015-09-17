@@ -3,9 +3,9 @@ import numpy as np
 
 from cora.util import coord
 
-from drift.core import telescope, visibility
-from drift.util import util, config
-from drift.util import typeutil
+from sphimg.core import telescope, visibility
+from sphimg.util import util, config
+from sphimg.util import typeutil
 
 
 

@@ -4,8 +4,8 @@ import numpy as np
 from scipy.special import jn
 
 from cora.util import coord
-from drift.core import telescope
-from drift.util import config
+from sphimg.core import telescope
+from sphimg.util import config
 
 
 def jinc(x):

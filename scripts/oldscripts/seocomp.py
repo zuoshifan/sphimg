@@ -4,8 +4,8 @@ import healpy
 from cora.util import coord
 
 
-from drift.telescope import cylinder
-from drift.telescope import visibility, beamtransfer, kltransform
+from sphimg.telescope import cylinder
+from sphimg.telescope import visibility, beamtransfer, kltransform
 
 class SeoTelescope(cylinder.UnpolarisedCylinderTelescope):
 

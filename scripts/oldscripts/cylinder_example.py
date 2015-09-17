@@ -2,11 +2,11 @@
 ##
 import os
 
-from drift.telescope import cylinder
-from drift.core import beamtransfer
-from drift.core import kltransform
-from drift.core import doublekl
-from drift.core import psmc
+from sphimg.telescope import cylinder
+from sphimg.core import beamtransfer
+from sphimg.core import kltransform
+from sphimg.core import doublekl
+from sphimg.core import psmc
 
 cyl = cylinder.UnpolarisedCylinderTelescope()
 

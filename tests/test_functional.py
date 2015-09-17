@@ -18,7 +18,7 @@ _scriptdir = os.path.realpath(_basedir + '/../scripts/')
 _pkgdir = os.path.realpath(_basedir + '/../')
 sys.path.insert(0, _pkgdir)
 
-from drift.core import manager
+from sphimg.core import manager
 
 
 def array_approx_equal(a, b, tol=1e-10):
@@ -55,7 +55,7 @@ class TestSimulate(unittest.TestCase):
                  cd %s
                  export OMP_NUM_THREADS=1
                  export PYTHONPATH=%s:$PYTHONPATH
-                 mpirun -np %i python %s/drift-makeproducts run params.yaml &> output.log
+                 mpirun -np %i python %s/sph-makeproducts run params.yaml &> output.log
               """
 
         cmd = cmd % (cls.testdir, _pkgdir, nproc, _scriptdir)

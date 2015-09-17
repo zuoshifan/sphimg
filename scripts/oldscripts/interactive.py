@@ -4,16 +4,16 @@ import shutil
 
 import yaml
 
-from drift.util import mpiutil
+from sphimg.util import mpiutil
 
-from drift.telescope import cylinder, gmrt, focalplane, restrictedcylinder
-from drift.core import beamtransfer
+from sphimg.telescope import cylinder, gmrt, focalplane, restrictedcylinder
+from sphimg.core import beamtransfer
 
-from drift.core import kltransform, doublekl
-from drift.core import psestimation, psmc
-from drift.core import skymodel
+from sphimg.core import kltransform, doublekl
+from sphimg.core import psestimation, psmc
+from sphimg.core import skymodel
 
-from drift.core import projection
+from sphimg.core import projection
 
 parser = argparse.ArgumentParser(description='Run a simulation job.')
 parser.add_argument('configfile', type=argparse.FileType('r'), help='The configuration file to use.')

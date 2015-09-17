@@ -1,8 +1,8 @@
 import numpy as np
 import h5py
 
-from drift.core import beamtransfer, manager
-from drift.pipeline import timestream
+from sphimg.core import beamtransfer, manager
+from sphimg.pipeline import timestream
 
 from simplearray import DishArray
 

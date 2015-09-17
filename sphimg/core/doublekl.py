@@ -4,13 +4,13 @@ import os
 import numpy as np
 import h5py
 
-from drift.core import kltransform
-from drift.util import mpiutil, config
-from drift.util import typeutil
+from sphimg.core import kltransform
+from sphimg.util import mpiutil, config
+from sphimg.util import typeutil
 
 from scalapy import core
 import scalapy.routines as rt
-from drift.util import scalapyutil as su
+from sphimg.util import scalapyutil as su
 
 
 class DoubleKL(kltransform.KLTransform):

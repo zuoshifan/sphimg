@@ -1,8 +1,8 @@
 import numpy as np
 
-from drift.telescope import cylinder
-from drift.util import util, config
-from drift.util import typeutil
+from sphimg.telescope import cylinder
+from sphimg.util import util, config
+from sphimg.util import typeutil
 
 def gaussian_fwhm(x, fwhm):
 

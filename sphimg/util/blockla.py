@@ -1,6 +1,6 @@
 import numpy as np
 import scipy.linalg
-from drift.util import mpiutil
+from sphimg.util import mpiutil
 
 
 def svd_dm(matrix, full_matrices=True):

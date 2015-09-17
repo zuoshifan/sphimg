@@ -6,8 +6,8 @@ import scipy.linalg as la
 
 import h5py
    
-from drift.core import beamtransfer, kltransform
-from drift.util import mpiutil
+from sphimg.core import beamtransfer, kltransform
+from sphimg.util import mpiutil
 
 path = sys.argv[1]
 
