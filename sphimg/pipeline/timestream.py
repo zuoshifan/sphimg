@@ -538,29 +538,70 @@ class Timestream(object):
             else:
                 alm = None
         else:
+            tel = self.telescope
+            nfreq = tel.nfreq
+            phi_inds = list(set(phi_inds) & set(range(self.ntime)))
+            phis = self.tphi[phi_inds]
+            nphi = phis.shape[0]
+
+            lfreq, sfreq, efreq = mpiutil.split_local(nfreq)
+            local_freq = range(sfreq, efreq)
+
+            # local frequecies section
+            tstream = np.zeros((lfreq, tel.nbase, nphi), dtype=np.complex128)
+            for ind, fi in enumerate(local_freq):
+                tstream[ind] = self.timestream_f(fi)[:, phi_inds]
+            sum_ts = np.sum(tstream, axis=-1)
+
+            lalm = self.beamtransfer.project_vector_telescope_to_sky_full(sum_ts, phis, local_freq)
+
+            # gather all local alms to rank0
+            gsizes = (nfreq,) + lalm.shape[1:]
+            lsize = lalm.shape
+            start = (sfreq, 0, 0, 0)
             if mpiutil.rank0:
-                tel = self.telescope
-                nfreq = tel.nfreq
-                phi_inds = list(set(phi_inds) & set(range(self.ntime)))
-                phis = self.tphi[phi_inds]
-                nphi = phis.shape[0]
-                tstream = np.zeros((nfreq, tel.nbase, nphi), dtype=np.complex128)
-                for fi in range(nfreq):
-                    tstream[fi] = self.timestream_f(fi)[:, phi_inds]
-                sum_ts = np.sum(tstream, axis=-1)
+                alm = np.zeros(gsizes, dtype=lalm.dtype)
+            else:
+                alm = None
 
-                alms = self.beamtransfer.project_vector_telescope_to_sky_full(sum_ts, phis)
+            comm = mpiutil.world
+            if comm is None:
+                alm[:lfreq, ...] = lalm
 
+            lsizes = comm.gather(lsize, root=0)
+            starts = comm.gather(start, root=0)
+            mpi_type = mpiutil.typemap(lalm.dtype)
+            if mpiutil.rank0:
+                # create newtype corresponding to the local alm section in the full alm array
+                subalm = [mpi_type.Create_subarray(gsizes, lsizes[i], starts[i]).Commit() for i in range(comm.size)] # default order=ORDER_C
+
+            # Each process should send its local sections.
+            sreq = comm.Isend([lalm, mpi_type], dest=0, tag=0)
+
+            if mpiutil.rank0:
+                # Post each receive
+                reqs = [ comm.Irecv([alm, subalm[sr]], source=sr, tag=0) for sr in range(comm.size) ]
+
+                # Wait for requests to complete
+                mpiutil.Prequest.Waitall(reqs)
+
+            # Wait on send request. Important, as can get weird synchronisation
+            # bugs otherwise as processes exit before completing their send.
+            sreq.Wait()
+
+            if mpiutil.rank0:
                 # Make directory for alms file
                 if not os.path.exists(self._almsdir):
                     os.makedirs(self._almsdir)
 
                 # Save alm
                 with h5py.File(almfile, 'w') as f:
-                    f.create_dataset('/alm', data=alms)
+                    f.create_dataset('/alm', data=alm)
+
+            del lalm
 
         if mpiutil.rank0:
-            skymap = hputil.sphtrans_inv_sky(alms, nside)
+            skymap = hputil.sphtrans_inv_sky(alm, nside)
             # Make directory for maps file
             if not os.path.exists(self._mapsdir):
                 os.makedirs(self._mapsdir)

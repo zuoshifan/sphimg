@@ -1286,36 +1286,39 @@ class BeamTransfer(object):
     project_vector_backward = project_vector_telescope_to_sky
 
 
-    def project_vector_telescope_to_sky_full(self, vec, phis):
+    def project_vector_telescope_to_sky_full(self, vec, phis, local_freq):
+        lfreq = len(local_freq)
         npol = self.telescope.num_pol_sky
         lside = self.telescope.lmax + 1
         nlms = lside**2
-        beam = np.zeros((self.nfreq, self.nbase, npol, nlms), dtype=self.beam_m(0).dtype)
-        for li in range(lside):
-            s = li**2
-            e = (li + 1)**2
-            beam[..., s:e] = self.beam_l(li)
-        beam = beam.reshape(self.nfreq, self.nbase, npol*nlms)
+        beam = np.zeros((self.nbase, npol, nlms), dtype=self.beam_m(0).dtype)
 
-        # vecb = np.zeros((self.nfreq, npol, nlms), dtype=np.complex128)
-        vecb = np.zeros((self.nfreq, npol, lside, lside), dtype=np.complex128)
+        sum_ephi = np.zeros(2*lside-1, dtype=np.complex128)
+        for mi in range(-lside+1, lside):
+            sum_ephi[mi] = np.sum(np.exp(1.0J * mi * phis))
 
-        for fi in range(self.nfreq):
+        vecb = np.zeros((lfreq, npol, lside, lside), dtype=np.complex128)
+
+        for ind, fi in enumerate(local_freq):
             print 'Map-making for freq: %d of %d...' % (fi, self.nfreq)
+            # load the beam from disk for frequency fi
+            for li in range(lside):
+                beam[..., li**2:(li+1)**2] = self.beam_l(li, fi)
+            beam = beam.reshape(self.nbase, npol*nlms)
+
             if self.noise_weight:
                 noisew = self.telescope.noisepower(np.arange(self.nbase), fi).flatten()**(-0.5)
-                beam[fi] = beam[fi] * noisew[:, np.newaxis]
-                vec[fi] = vec[fi] * noisew
+                beam = beam * noisew[:, np.newaxis]
+                vec[ind] = vec[ind] * noisew
 
             print 'Start dot...'
-            lhs = np.dot(beam[fi].T.conj(), beam[fi])
+            lhs = np.dot(beam.T.conj(), beam)
             print 'Dot done.'
             for li in range(lside):
                 for mi in range(-li, li+1):
-                    sum_ephi = np.sum(np.exp(1.0J * mi * phis))
-                    lhs[li**2+li+mi] = lhs[li**2+li+mi] * sum_ephi
+                    lhs[li**2+li+mi] *= sum_ephi[mi]
             print 'Start dot...'
-            rhs = np.dot(beam[fi].T.conj(), vec[fi])
+            rhs = np.dot(beam.T.conj(), vec[ind])
             print 'Dot done.'
 
             print 'Start solve...'
@@ -1326,7 +1329,7 @@ class BeamTransfer(object):
             for li in range(lside):
                 for mi in range(0, li+1):
                     # vecb[fi, :, li, mi] = 0.5 * (x[:, li**2+li+mi] + (-1)**mi * x[:, li**2+li-mi])
-                    vecb[fi, :, li, mi] = x[:, li**2+li+mi]
+                    vecb[ind, :, li, mi] = x[:, li**2+li+mi]
 
         return vecb
 
