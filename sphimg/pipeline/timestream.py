@@ -1173,7 +1173,8 @@ def simulate(m, outdir, tsname, maps=[], ndays=None, resolution=0, seed=None, **
                     row_map += f['map'][sfreq:efreq]
 
             # Calculate the alm's for the local sections
-            row_alm = hputil.sphtrans_sky(row_map, lmax=lmax).reshape((lfreq, npol * (lmax+1), lmax+1))
+            # row_alm = hputil.sphtrans_sky(row_map, lmax=lmax).reshape((lfreq, npol * (lmax+1), lmax+1))
+            row_alm = hputil.sphtrans_sky(row_map, lmax=lmax)[:, :npol].reshape((lfreq, npol * (lmax+1), lmax+1))
 
         else:
             row_alm = np.zeros((lfreq, npol * (lmax+1), lmax+1), dtype=np.complex128)
