@@ -521,7 +521,7 @@ class Timestream(object):
         mpiutil.barrier()
 
 
-    def mapmake(self, nside, phi_inds, maptype):
+    def mapmake(self, nside, phi_inds, maptype, maxl):
         mapfile = self._mapsdir + 'map_%s.hdf5' % maptype
         almfile = self._almsdir + 'alm_%s.hdf5' % maptype
 
@@ -553,7 +553,7 @@ class Timestream(object):
                 tstream[ind] = self.timestream_f(fi)[:, phi_inds]
             sum_ts = np.sum(tstream, axis=-1)
 
-            lalm = self.beamtransfer.project_vector_telescope_to_sky_full(sum_ts, phis, local_freq)
+            lalm = self.beamtransfer.project_vector_telescope_to_sky_full(sum_ts, phis, local_freq, maxl)
 
             # gather all local alms to rank0
             gsizes = (nfreq,) + lalm.shape[1:]

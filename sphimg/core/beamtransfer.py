@@ -1286,10 +1286,16 @@ class BeamTransfer(object):
     project_vector_backward = project_vector_telescope_to_sky
 
 
-    def project_vector_telescope_to_sky_full(self, vec, phis, local_freq):
+    def project_vector_telescope_to_sky_full(self, vec, phis, local_freq, maxl=None):
+        """Invert a vector from the telescope space onto the sky. This is the
+        map-making process."""
+
         lfreq = len(local_freq)
         npol = self.telescope.num_pol_sky
-        lside = self.telescope.lmax + 1
+        if maxl is None:
+            lside = self.telescope.lmax + 1
+        else:
+            lside = min(maxl+1, self.telescope.lmax+1)
         nlms = lside**2
         beam = np.zeros((self.nbase, npol, nlms), dtype=self.beam_m(0).dtype)
 
