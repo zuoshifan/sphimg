@@ -171,7 +171,6 @@ class TransitTelescope(config.Reader):
     ndays = config.Property(proptype=typeutil.positive_int, default=733)
 
     accuracy_boost = config.Property(proptype=typeutil.positive_float, default=1.0)
-    maxl = config.Property(proptype=typeutil.none_or_positive_int, default=None)
     l_boost = config.Property(proptype=typeutil.positive_float, default=1.0)
 
     minlength = config.Property(proptype=typeutil.nonnegative_float, default=0.0)
@@ -359,20 +358,14 @@ class TransitTelescope(config.Reader):
         """The maximum l the telescope is sensitive to."""
         lmax, mmax = max_lm(self.baselines, self.wavelengths[-1], self.u_width, self.v_width)
         lmax = int(np.ceil(lmax.max() * self.l_boost))
-        if self.maxl:
-            return min(lmax, self.maxl)
-        else:
-            return lmax
+        return lmax
 
     @property
     def mmax(self):
         """The maximum m the telescope is sensitive to."""
         lmax, mmax = max_lm(self.baselines, self.wavelengths[-1], self.u_width, self.v_width)
         mmax = int(np.ceil(mmax.max() * self.l_boost))
-        if self.maxl:
-            return self.lmax
-        else:
-            return mmax
+        return mmax
 
     #===================================================
 
