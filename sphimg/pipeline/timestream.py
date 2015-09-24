@@ -547,7 +547,7 @@ class Timestream(object):
             lfreq, sfreq, efreq = mpiutil.split_local(nfreq)
             local_freq = range(sfreq, efreq)
 
-            # local frequecies section
+            # local frequencies section
             tstream = np.zeros((lfreq, tel.nbase, nphi), dtype=np.complex128)
             for ind, fi in enumerate(local_freq):
                 tstream[ind] = self.timestream_f(fi)[:, phi_inds]

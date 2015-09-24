@@ -1310,6 +1310,8 @@ class BeamTransfer(object):
             # load the beam from disk for frequency fi
             for li in range(lside):
                 beam[..., li**2:(li+1)**2] = self.beam_l(li, fi)
+                for mi in range(-li, li+1):
+                   beam[..., li**2+li+mi] *= sum_ephi[mi]
             beam = beam.reshape(self.nbase, npol*nlms)
 
             if self.noise_weight:
@@ -1320,9 +1322,9 @@ class BeamTransfer(object):
             print 'Start dot...'
             lhs = np.dot(beam.T.conj(), beam)
             print 'Dot done.'
-            for li in range(lside):
-                for mi in range(-li, li+1):
-                    lhs[li**2+li+mi] *= sum_ephi[mi]
+            # for li in range(lside):
+            #     for mi in range(-li, li+1):
+            #         lhs[li**2+li+mi] *= sum_ephi[mi]
             print 'Start dot...'
             rhs = np.dot(beam.T.conj(), vec[ind])
             print 'Dot done.'
@@ -1334,7 +1336,7 @@ class BeamTransfer(object):
 
             for li in range(lside):
                 for mi in range(0, li+1):
-                    vecb[ind, :, li, mi] = 0.5 * (x[:, li**2+li+mi] + (-1)**mi * x[:, li**2+li-mi])
+                    vecb[ind, :, li, mi] = 0.5 * (x[:, li**2+li+mi] + (-1)**mi * x[:, li**2+li-mi].conj())
                     # vecb[ind, :, li, mi] = x[:, li**2+li+mi]
 
         return vecb
