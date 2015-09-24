@@ -357,15 +357,13 @@ class TransitTelescope(config.Reader):
     def lmax(self):
         """The maximum l the telescope is sensitive to."""
         lmax, mmax = max_lm(self.baselines, self.wavelengths[-1], self.u_width, self.v_width)
-        lmax = int(np.ceil(lmax.max() * self.l_boost))
-        return lmax
+        return int(np.ceil(lmax.max() * self.l_boost))
 
     @property
     def mmax(self):
         """The maximum m the telescope is sensitive to."""
         lmax, mmax = max_lm(self.baselines, self.wavelengths[-1], self.u_width, self.v_width)
-        mmax = int(np.ceil(mmax.max() * self.l_boost))
-        return mmax
+        return int(np.ceil(mmax.max() * self.l_boost))
 
     #===================================================
 
@@ -546,7 +544,7 @@ class TransitTelescope(config.Reader):
 
     #==== Methods for calculating Transfer matrices ====
 
-    def transfer_matrices(self, bl_indices, f_indices, global_lmax = True):
+    def transfer_matrices(self, bl_indices, f_indices, global_lmax = True, centered = False):
         """Calculate the spherical harmonic transfer matrices for baseline and
         frequency combinations.
 
@@ -598,8 +596,7 @@ class TransitTelescope(config.Reader):
         # order, calculating the transfer matrices
         for iflat in np.argsort(lmax.flat):
             ind = np.unravel_index(iflat, lmax.shape)
-            # trans = self._transfer_single(bl_indices[ind], f_indices[ind], lmax[ind], lside - 1)
-            trans = self._transfer_single(bl_indices[ind], f_indices[ind], lside - 1, lside - 1)
+            trans = self._transfer_single(bl_indices[ind], f_indices[ind], lmax[ind], lside - 1, centered = centered)
 
             ## Iterate over pol combinations and copy into transfer array
             for pi in range(self.num_pol_sky):
@@ -776,7 +773,7 @@ class TransitTelescope(config.Reader):
 
     # The work method which does the bulk of calculating all the transfer matrices.
     @abc.abstractmethod
-    def _transfer_single(self, bl_index, f_index, lmax, lside):
+    def _transfer_single(self, bl_index, f_index, lmax, lside, centered = False):
         """Calculate transfer matrix for a single baseline+frequency.
 
         **Abstract method** must be implemented.
@@ -862,7 +859,7 @@ class UnpolarisedTelescope(TransitTelescope):
         return cvis
 
 
-    def _transfer_single(self, bl_index, f_index, lmax, lside):
+    def _transfer_single(self, bl_index, f_index, lmax, lside, centered = False):
 
         if self._nside != hputil.nside_for_lmax(lmax, accuracy_boost=self.accuracy_boost):
             self._init_trans(hputil.nside_for_lmax(lmax, accuracy_boost=self.accuracy_boost))
@@ -870,8 +867,7 @@ class UnpolarisedTelescope(TransitTelescope):
         cvis = self._beam_map_single(bl_index, f_index)
 
         # Perform the harmonic transform to get the transfer matrix (conj is correct - see paper)
-        # btrans = hputil.sphtrans_complex(cvis.conj(), centered = False, lmax = lmax, lside=lside).conj()
-        btrans = hputil.sphtrans_complex(cvis.conj(), centered = True, lmax = lmax, lside=lside).conj()
+        btrans = hputil.sphtrans_complex(cvis.conj(), centered = centered, lmax = lmax, lside=lside).conj()
 
         return [ btrans ]
 
@@ -955,15 +951,14 @@ class PolarisedTelescope(TransitTelescope):
 
     #===== Implementations of abstract functions =======
 
-    def _transfer_single(self, bl_index, f_index, lmax, lside):
+    def _transfer_single(self, bl_index, f_index, lmax, lside, centered = False):
 
         if self._nside != hputil.nside_for_lmax(lmax):
             self._init_trans(hputil.nside_for_lmax(lmax))
 
         bmap = self._beam_map_single(bl_index, f_index)
 
-        # btrans = [ pb.conj() for pb in hputil.sphtrans_complex_pol([bm.conj() for bm in bmap], centered = False, lmax = int(lmax), lside=lside) ]
-        btrans = [ pb.conj() for pb in hputil.sphtrans_complex_pol([bm.conj() for bm in bmap], centered = True, lmax = int(lmax), lside=lside) ]
+        btrans = [ pb.conj() for pb in hputil.sphtrans_complex_pol([bm.conj() for bm in bmap], centered = centered, lmax = int(lmax), lside=lside) ]
 
         return btrans
 

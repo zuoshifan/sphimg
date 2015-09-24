@@ -841,7 +841,7 @@ class BeamTransfer(object):
             if loc_num > 0:
 
                 # Calculate the local Beam Matrices
-                tarray = self.telescope.transfer_matrices(bl_ind, f_ind)
+                tarray = self.telescope.transfer_matrices(bl_ind, f_ind, centered=False)
 
                 # Expensive memory copy into array section
                 for mi in range(1, self.telescope.mmax+1):
@@ -963,7 +963,7 @@ class BeamTransfer(object):
             if loc_num > 0:
 
                 # Calculate the local Beam Matrices
-                tarray = self.telescope.transfer_matrices(bl_ind, f_ind)
+                tarray = self.telescope.transfer_matrices(bl_ind, f_ind, centered=True)
 
                 # Expensive memory copy into array section
                 for li in range(1, lmax+1):
@@ -1334,8 +1334,8 @@ class BeamTransfer(object):
 
             for li in range(lside):
                 for mi in range(0, li+1):
-                    # vecb[fi, :, li, mi] = 0.5 * (x[:, li**2+li+mi] + (-1)**mi * x[:, li**2+li-mi])
-                    vecb[ind, :, li, mi] = x[:, li**2+li+mi]
+                    vecb[ind, :, li, mi] = 0.5 * (x[:, li**2+li+mi] + (-1)**mi * x[:, li**2+li-mi])
+                    # vecb[ind, :, li, mi] = x[:, li**2+li+mi]
 
         return vecb
 

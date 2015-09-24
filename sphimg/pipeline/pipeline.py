@@ -183,8 +183,8 @@ class PipelineManager(config.Reader):
                     print '=' * 80
                     print "Generating full map (%s)..." % tsname
 
-                # tsobj.mapmake_full(self.nside, 'full', self.fullmap_fwhm, rank_ratio=self.full_rank_ratio, lcut=self.full_lcut)
-                tsobj.mapmake(self.nside, self.phi_inds, 'full', self.maxl)
+                tsobj.mapmake_full(self.nside, 'full', self.fullmap_fwhm, rank_ratio=self.full_rank_ratio, lcut=self.full_lcut)
+                tsobj.mapmake(self.nside, self.phi_inds, 'part', self.maxl)
 
 
             if self.generate_svdmodes:
