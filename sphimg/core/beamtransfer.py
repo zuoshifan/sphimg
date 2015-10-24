@@ -1293,17 +1293,18 @@ class BeamTransfer(object):
         map-making process."""
 
         lfreq = len(local_freq)
+        nphi = phis.shape[0]
         npol = self.telescope.num_pol_sky
         if maxl is None:
             lside = self.telescope.lmax + 1
         else:
             lside = min(maxl+1, self.telescope.lmax+1)
         nlms = lside**2
-        beam = np.zeros((self.nbase, npol, nlms), dtype=self.beam_m(0).dtype)
+        beam = np.zeros((nphi, self.nbase, npol, nlms), dtype=self.beam_m(0).dtype)
 
-        sum_ephi = np.zeros(2*lside-1, dtype=np.complex128)
-        for mi in range(-lside+1, lside):
-            sum_ephi[mi] = np.sum(np.exp(1.0J * mi * phis))
+        # sum_ephi = np.zeros(2*lside-1, dtype=np.complex128)
+        # for mi in range(-lside+1, lside):
+        #     sum_ephi[mi] = np.sum(np.exp(1.0J * mi * phis))
 
         vecb = np.zeros((lfreq, npol, lside, lside), dtype=np.complex128)
 
@@ -1311,15 +1312,20 @@ class BeamTransfer(object):
             print 'Map-making for freq: %d of %d...' % (fi, self.nfreq)
             # load the beam from disk for frequency fi
             for li in range(lside):
-                beam[..., li**2:(li+1)**2] = self.beam_l(li, fi)
-                for mi in range(-li, li+1):
-                   beam[..., li**2+li+mi] *= sum_ephi[mi]
-            beam = beam.reshape(self.nbase, npol*nlms)
+                tmp = self.beam_l(li, fi)
+                shp = tmp.shape
+                tmp = np.tile(self.beam_l(li, fi), (nphi, 1, 1)).reshape((nphi,) + shp)
+                beam[..., li**2:(li+1)**2] = tmp
+                for pi, phi in enumerate(phis):
+                    for mi in range(-li, li+1):
+                        beam[pi, ..., li**2+li+mi] *= np.exp(1.0J * mi * phi)
+            beam = beam.reshape(nphi*self.nbase, npol*nlms)
 
             if self.noise_weight:
                 noisew = self.telescope.noisepower(np.arange(self.nbase), fi).flatten()**(-0.5)
+                noisew = np.tile(noisew, nphi)
                 beam = beam * noisew[:, np.newaxis]
-                vec[ind] = vec[ind] * noisew
+                v = vec[ind].T.reshape(-1) * noisew
 
             # print 'Start dot...'
             # lhs = np.dot(beam.T.conj(), beam)
@@ -1333,7 +1339,7 @@ class BeamTransfer(object):
 
             print 'Start solve...'
             # x, resids, rank, s = la.lstsq(lhs, rhs, cond=1e-6)
-            x, resids, rank, s = la.lstsq(beam, vec[ind], cond=1e-3)
+            x, resids, rank, s = la.lstsq(beam, v, cond=1e-2)
             print 'Solve done.'
             x = x.reshape(npol, nlms)
 

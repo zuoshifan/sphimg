@@ -551,9 +551,9 @@ class Timestream(object):
             tstream = np.zeros((lfreq, tel.nbase, nphi), dtype=np.complex128)
             for ind, fi in enumerate(local_freq):
                 tstream[ind] = self.timestream_f(fi)[:, phi_inds]
-            sum_ts = np.sum(tstream, axis=-1)
+            # sum_ts = np.sum(tstream, axis=-1)
 
-            lalm = self.beamtransfer.project_vector_telescope_to_sky_full(sum_ts, phis, local_freq, maxl)
+            lalm = self.beamtransfer.project_vector_telescope_to_sky_full(tstream, phis, local_freq, maxl)
 
             # gather all local alms to rank0
             gsizes = (nfreq,) + lalm.shape[1:]
