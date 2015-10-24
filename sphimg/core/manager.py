@@ -6,7 +6,7 @@ import yaml
 
 from sphimg.util import mpiutil
 
-from sphimg.telescope import cylinder, gmrt, focalplane, restrictedcylinder, exotic_cylinder
+from sphimg.telescope import cylinder, gmrt, focalplane, restrictedcylinder, exotic_cylinder, tldish
 from sphimg.core import beamtransfer
 
 from sphimg.core import kltransform, doublekl
@@ -26,7 +26,9 @@ teltype_dict =  {   'UnpolarisedCylinder'   : cylinder.UnpolarisedCylinderTelesc
                     'ShiftedCylinder'        : exotic_cylinder.PolarisedCylinderShift,
                     'UnequalFeedsUnpolCylinder'  : exotic_cylinder.UnequalFeedsUnpolarisedCylinder,
                     'UnequalFeedsCylinder'  : exotic_cylinder.UnequalFeedsCylinder,
-                    'ArbitraryCylinder'     : exotic_cylinder.ArbitraryPolarisedCylinder
+                    'ArbitraryCylinder'     : exotic_cylinder.ArbitraryPolarisedCylinder,
+                    'TlUnpolarisedDishArray' : tldish.TlUnpolarisedDishArray,
+                    'TlPolarisedDishArray'  : tldish.TlPolarisedDishArray,
                 }
 
 

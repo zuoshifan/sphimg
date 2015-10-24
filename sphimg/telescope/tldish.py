@@ -1,3 +1,5 @@
+import os
+import abc
 import numpy as np
 from scipy.special import jn
 
@@ -104,14 +106,14 @@ class TlDishArray(config.Reader):
     @property
     def _single_feedpositions(self):
         ## An (nfeed,2) array of the feed positions relative to an arbitary point (in m)
-        pos = np.loadtxt('16dishes_coord.txt')
-        cpos = pos[center_dish] # central antenna coordinate
+        pos = np.loadtxt(os.path.dirname(__file__) + '/16dishes_coord.txt')
+        cpos = pos[self.center_dish] # central antenna coordinate
         pos -= cpos
 
         return pos
 
 
-class TlPolarisedDishArray(TlDishArray, telescope.SimpleUnpolarisedTelescope):
+class TlUnpolarisedDishArray(TlDishArray, telescope.SimpleUnpolarisedTelescope):
     """A Telescope describing the Tianlai non-polarized dishe array.
 
     See Also
