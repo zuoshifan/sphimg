@@ -33,6 +33,8 @@ from sphimg.core import kltransform
 
 from scalapy import core
 
+from homotopy import homotopy
+
 
 def svd_gen(A, errmsg=None, *args, **kwargs):
     """Singular Value Decomposition of `A`.
@@ -1319,20 +1321,26 @@ class BeamTransfer(object):
                 beam = beam * noisew[:, np.newaxis]
                 vec[ind] = vec[ind] * noisew
 
-            print 'Start dot...'
-            lhs = np.dot(beam.T.conj(), beam)
-            print 'Dot done.'
-            # for li in range(lside):
-            #     for mi in range(-li, li+1):
-            #         lhs[li**2+li+mi] *= sum_ephi[mi]
-            print 'Start dot...'
-            rhs = np.dot(beam.T.conj(), vec[ind])
-            print 'Dot done.'
+            # print 'Start dot...'
+            # lhs = np.dot(beam.T.conj(), beam)
+            # print 'Dot done.'
+            # # for li in range(lside):
+            # #     for mi in range(-li, li+1):
+            # #         lhs[li**2+li+mi] *= sum_ephi[mi]
+            # print 'Start dot...'
+            # rhs = np.dot(beam.T.conj(), vec[ind])
+            # print 'Dot done.'
 
             print 'Start solve...'
-            x, resids, rank, s = la.lstsq(lhs, rhs, cond=1e-6)
+            # x, resids, rank, s = la.lstsq(lhs, rhs, cond=1e-6)
+            x, resids, rank, s = la.lstsq(beam, vec[ind], cond=1e-3)
             print 'Solve done.'
             x = x.reshape(npol, nlms)
+
+            # # l1-homotopy
+            # h = homotopy.Homotopy(beam, vec[ind])
+            # x = h.solve(stop_inc_err=True, warnings=True, verbose=1)
+            # x = x.reshape(npol, nlms)
 
             for li in range(lside):
                 for mi in range(0, li+1):
