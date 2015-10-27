@@ -179,17 +179,17 @@ class TransitTelescope(config.Reader):
     auto_correlations = config.Property(proptype=bool, default=False)
 
 
-    def __init__(self, latitude=45, longitude=0):
-        """Initialise a telescope object.
+    # def __init__(self, latitude=45, longitude=0):
+    #     """Initialise a telescope object.
 
-        Parameters
-        ----------
-        latitude, longitude : scalar
-            Position on the Earths surface of the telescope (in degrees).
-        """
+    #     Parameters
+    #     ----------
+    #     latitude, longitude : scalar
+    #         Position on the Earths surface of the telescope (in degrees).
+    #     """
 
-        # NOTE: latlon_to_sphpol is automatically applied on assignment
-        self.zenith = [latitude, longitude]
+    #     # NOTE: latlon_to_sphpol is automatically applied on assignment
+    #     self.zenith = [latitude, longitude]
 
 
 
