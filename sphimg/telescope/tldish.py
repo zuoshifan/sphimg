@@ -10,7 +10,7 @@ from sphimg.util import config
 
 def ang_conv(ang):
     """
-    Covert the string represents of angle in degree to radian.
+    Covert the string represents of angle in degree to float number in degree.
 
     Parameters
     ----------
@@ -22,7 +22,7 @@ def ang_conv(ang):
     for n in range(len(ang)):
         tmp += float(ang[n]) / 60.0**n
 
-    return np.radians(tmp)
+    return tmp
 
 
 def latlon_to_sphpol(latlon):
