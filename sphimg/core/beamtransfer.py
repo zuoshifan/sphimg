@@ -16,9 +16,9 @@ Classes
 """
 
 try:
-   import cPickle as pickle
+    import cPickle as pickle
 except ImportError:
-   import pickle
+    import pickle
 
 import os
 import sys
@@ -26,6 +26,7 @@ import time
 
 import numpy as np
 import scipy.linalg as la
+from sklearn.linear_model import BayesianRidge as br
 import h5py
 
 from sphimg.util import mpiutil, util, blockla
@@ -34,6 +35,73 @@ from sphimg.core import kltransform
 from scalapy import core
 
 from homotopy import homotopy
+
+
+def complex_br(A, y, n_iter=300, tol=0.001, alpha_1=1e-06, alpha_2=1e-06, lambda_1=1e-06, lambda_2=1e-06, compute_score=False, fit_intercept=False, normalize=False, copy_A=True, verbose=True):
+    """
+    Minimization ||A x - y||^2 by using Bayesian ridge regression.
+
+    Parameters
+    ----------
+    A : (M, N) ndarray
+        Left matrix.
+    y : (M,) ndarray
+        Right hand vector.
+    n_iter : int, optional
+        Maximum number of iterations.  Default is 300.
+    tol : float, optional
+        Stop the algorithm if w has converged. Default is 1.e-3.
+    alpha_1 : float, optional
+        Hyper-parameter : shape parameter for the Gamma distribution prior
+        over the alpha parameter. Default is 1.e-6
+    alpha_2 : float, optional
+        Hyper-parameter : inverse scale parameter (rate parameter) for the
+        Gamma distribution prior over the alpha parameter.
+        Default is 1.e-6.
+    lambda_1 : float, optional
+        Hyper-parameter : shape parameter for the Gamma distribution prior
+        over the lambda parameter. Default is 1.e-6.
+    lambda_2 : float, optional
+        Hyper-parameter : inverse scale parameter (rate parameter) for the
+        Gamma distribution prior over the lambda parameter.
+        Default is 1.e-6
+    compute_score : boolean, optional
+        If True, compute the objective function at each step of the model.
+        Default is False
+    fit_intercept : boolean, optional
+        whether to calculate the intercept for this model. If set
+        to false, no intercept will be used in calculations
+        (e.g. data is expected to be already centered).
+        Default is False.
+    normalize : boolean, optional, default False
+        If True, the regressors X will be normalized before regression.
+    copy_A : boolean, optional, default True
+        If True, A will be copied; else, it may be overwritten.
+    verbose : boolean, optional, default True
+        Verbose mode when fitting the model.
+
+    Returns
+    -------
+    x : (N,) ndarray
+        The solution vector.
+    """
+    M, N = A.shape
+    (M1,) = y.shape
+    assert M == M1, 'Invalid shape for input matrix A and vector y: (%d, %d) and (%d)' % (M, N, M1)
+
+    A1 = np.zeros((2*M, 2*N), dtype=A.real.dtype)
+    A1[:M, :N] = A.real
+    A1[:M, N:] = -A.imag
+    A1[M:, :N] = A.imag
+    A1[M:, N:] = A.real
+    if not copy_A:
+        del A
+    y1 = np.zeros(2*M, dtype=y.real.dtype)
+    y1[:M] = y.real
+    y1[M:] = y.imag
+    clf = br(n_iter=n_iter, tol=tol, alpha_1=alpha_1, alpha_2=alpha_2, lambda_1=lambda_1, lambda_2=lambda_2, compute_score=compute_score, fit_intercept=fit_intercept, normalize=normalize, copy_X=False, verbose=verbose)
+    clf.fit(A1, y1)
+    return clf.coef_[:N] + 1.0J * clf.coef_[N:]
 
 
 def svd_gen(A, errmsg=None, *args, **kwargs):
@@ -1338,8 +1406,8 @@ class BeamTransfer(object):
             # print 'Dot done.'
 
             print 'Start solve...'
-            # x, resids, rank, s = la.lstsq(lhs, rhs, cond=1e-6)
-            x, resids, rank, s = la.lstsq(beam, v, cond=1e-2)
+            # x, resids, rank, s = la.lstsq(beam, v, cond=1e-2)
+            x = complex_br(beam, v, tol=1.0e-6, copy_A=False)
             print 'Solve done.'
             x = x.reshape(npol, nlms)
 
