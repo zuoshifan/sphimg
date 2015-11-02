@@ -1344,12 +1344,16 @@ class BeamTransfer(object):
                 beam[fi] = beam[fi] * noisew[:, np.newaxis]
                 vec[fi] = vec[fi] * noisew
 
-            x, resids, rank, s = la.lstsq(np.dot(beam[fi].T.conj(), beam[fi]), np.dot(beam[fi].T.conj(), vec[fi]), cond=1e-6)
-            if rank > rank_ratio * self.nsky(0): # max nsky = nsky(0)
-                for p in range(npol):
-                    vecb[fi, p, mi:lcut1] = x[p*(lcut1-mi):(p+1)*(lcut1-mi)]
-            else:
-                print 'Rank <= %.1f for m = %d, fi = %d...' % (rank_ratio*self.nsky(0), mi, fi)
+            # x, resids, rank, s = la.lstsq(np.dot(beam[fi].T.conj(), beam[fi]), np.dot(beam[fi].T.conj(), vec[fi]), cond=1e-6)
+            # if rank > rank_ratio * self.nsky(0): # max nsky = nsky(0)
+            #     for p in range(npol):
+            #         vecb[fi, p, mi:lcut1] = x[p*(lcut1-mi):(p+1)*(lcut1-mi)]
+            # else:
+            #     print 'Rank <= %.1f for m = %d, fi = %d...' % (rank_ratio*self.nsky(0), mi, fi)
+
+            x = complex_br(np.dot(beam[fi].T.conj(), beam[fi]), np.dot(beam[fi].T.conj(), vec[fi]), n_iter=500, tol=1.0e-6, copy_A=False)
+            for p in range(npol):
+                vecb[fi, p, mi:lcut1] = x[p*(lcut1-mi):(p+1)*(lcut1-mi)]
 
         return vecb
 
