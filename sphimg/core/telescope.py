@@ -1,6 +1,7 @@
 import abc
 
 import numpy as np
+import h5py
 
 from cora.util import hputil, units
 
@@ -177,6 +178,12 @@ class TransitTelescope(config.Reader):
     maxlength = config.Property(proptype=typeutil.nonnegative_float, default=1.0e7)
 
     auto_correlations = config.Property(proptype=bool, default=False)
+
+
+    u_max = config.Property(proptype=typeutil.positive_int, default=100)
+    v_max = config.Property(proptype=typeutil.positive_int, default=100)
+    latra = config.Property(proptype=list, default=[4, 4])
+    lonra = config.Property(proptype=list, default=[4, 4])
 
 
     # def __init__(self, latitude=45, longitude=0):
@@ -606,6 +613,52 @@ class TransitTelescope(config.Reader):
         return tarray
 
 
+    def transfer_uv(self, bl_indices, f_indices):
+        """Calculate the spherical harmonic transfer matrices for baseline and
+        frequency combinations.
+
+        Parameters
+        ----------
+        bl_indices : array_like
+            Indices of baselines to calculate.
+        f_indices : array_like
+            Indices of frequencies to calculate. Must be broadcastable against
+            `bl_indices`.
+
+        Returns
+        -------
+        transfer : np.ndarray, dtype=np.complex128
+            An array containing the transfer functions. The shape is somewhat
+            complicated, the first indices correspond to the broadcast size of
+            `bl_indices` and `f_indices`, then there may be some polarisation
+            indices, then finally the (l,m) indices, range (lside, 2*lside-1).
+        """
+
+        # Broadcast arrays against each other
+        # bl_indices, f_indices = np.broadcast_arrays(bl_indices, f_indices)
+        nbl = len(bl_indices)
+        nf = len(f_indices)
+
+        ## Check indices are all in range
+        if out_of_range(bl_indices, 0, self.npairs):
+            raise Exception("Baseline indices aren't valid")
+
+        if out_of_range(f_indices, 0, self.nfreq):
+            raise Exception("Frequency indices aren't valid")
+
+        u_max, v_max = self.u_max, self.v_max
+        # Generate the Fourier transform array for the Transfer functions
+        tshape = (nbl, nf, self.num_pol_sky, 2*u_max+1, 2*v_max+1)
+        print "Size: %i elements. Memory %f GB." % (np.prod(tshape), 2*np.prod(tshape) * 8.0 / 2**30)
+        tarray = np.zeros(tshape, dtype=np.complex128)
+
+        for bl_ind in range(nbl):
+            for f_ind in range(nf):
+                tarray[bl_ind, f_ind] = self._transfer_single_uv(bl_indices[bl_ind], f_indices[f_ind])
+
+        return tarray
+
+
     def transfer_for_frequency(self, freq):
         """Fetch all transfer matrices for a given frequency.
 
@@ -800,6 +853,11 @@ class TransitTelescope(config.Reader):
         return
 
 
+    @abc.abstractmethod
+    def _transfer_single_uv(self, bl_index, f_index):
+        return
+
+
     #===================================================
     #============== END ABSTRACT METHODS ===============
     #===================================================
@@ -870,6 +928,22 @@ class UnpolarisedTelescope(TransitTelescope):
         btrans = hputil.sphtrans_complex(cvis.conj(), centered = centered, lmax = lmax, lside=lside).conj()
 
         return [ btrans ]
+
+
+    def _transfer_single_uv(self, bl_index, f_index):
+        if self._nside != hputil.nside_for_lmax(lmax, accuracy_boost=self.accuracy_boost):
+            self._init_trans(hputil.nside_for_lmax(lmax, accuracy_boost=self.accuracy_boost))
+
+        cvis = self._beam_map_single(bl_index, f_index)
+
+        lat, lon = np.degrees(self.zenith) # degrees
+        latra = [lat-self.latra[0], lat+self.latra[1]]
+        lonra = [lon-self.lonra[0], lon+self.lonra[1]]
+        beam_cart = healpy.cartview(cvis, latra=latra, lonra=lonra, xsize=2*self.u_max+1, ysize=2*self.v_max+1, return_projected_map=True) # only T map
+        # beam_uv = np.fft.fftshift(np.fft.fft(beam_cart)) # zero freq at center
+        beam_uv = np.fft.fft(beam_cart) # zero freq at left
+
+        return beam_uv
 
 
     #===================================================
