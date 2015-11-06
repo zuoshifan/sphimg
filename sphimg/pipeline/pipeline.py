@@ -185,6 +185,7 @@ class PipelineManager(config.Reader):
 
                 tsobj.mapmake_full(self.nside, 'full', self.fullmap_fwhm, rank_ratio=self.full_rank_ratio, lcut=self.full_lcut)
                 tsobj.mapmake(self.nside, self.phi_inds, 'part', self.maxl)
+                tsobj.mapmake_ft(self.phi_inds, 'ft')
 
 
             if self.generate_svdmodes:

@@ -1,7 +1,7 @@
 try:
-   import cPickle as pickle
+    import cPickle as pickle
 except ImportError:
-   import pickle
+    import pickle
 
 import os
 import shutil
@@ -613,7 +613,108 @@ class Timestream(object):
         mpiutil.barrier()
 
 
-    def mapmake_svd(self, nside, maptype , fwhm=0.0, rank_ratio=0.0, lcut=None):
+    def mapmake_ft(self, phi_inds, maptype):
+        mapfile = self._mapsdir + 'map_%s.hdf5' % maptype
+        tuvfile = self._almsdir + 'tuv_%s.hdf5' % maptype
+
+        if os.path.exists(mapfile):
+            if mpiutil.rank0:
+                print "File %s exists. Skipping..." % mapfile
+            mpiutil.barrier()
+            return
+        elif os.path.exists(tuvfile):
+            if mpiutil.rank0:
+                print "File %s exists. Read from it..." % tuvfile
+                with h5py.File(tuvfile, 'r') as f:
+                    tuv = f['tuv'][...]
+            else:
+                tuv = None
+        else:
+            tel = self.telescope
+            nfreq = tel.nfreq
+            phi_inds = list(set(phi_inds) & set(range(self.ntime)))
+            phis = self.tphi[phi_inds]
+            nphi = phis.shape[0]
+
+            lfreq, sfreq, efreq = mpiutil.split_local(nfreq)
+            local_freq = range(sfreq, efreq)
+
+            # local frequencies section
+            tstream = np.zeros((lfreq, tel.nbase, nphi), dtype=np.complex128)
+            for ind, fi in enumerate(local_freq):
+                tstream[ind] = self.timestream_f(fi)[:, phi_inds]
+            # sum_ts = np.sum(tstream, axis=-1)
+
+            ltuv = self.beamtransfer.project_vector_telescope_to_sky_ft(tstream, phis, local_freq)
+
+            # gather all local alms to rank0
+            gsizes = (nfreq,) + ltuv.shape[1:]
+            lsize = ltuv.shape
+            start = (sfreq, 0, 0, 0)
+            if mpiutil.rank0:
+                tuv = np.zeros(gsizes, dtype=ltuv.dtype)
+            else:
+                tuv = None
+
+            comm = mpiutil.world
+            if comm is None:
+                tuv[:lfreq, ...] = ltuv
+
+            lsizes = comm.gather(lsize, root=0)
+            starts = comm.gather(start, root=0)
+            mpi_type = mpiutil.typemap(ltuv.dtype)
+            if mpiutil.rank0:
+                # create newtype corresponding to the local alm section in the full alm array
+                subtuv = [mpi_type.Create_subarray(gsizes, lsizes[i], starts[i]).Commit() for i in range(comm.size)] # default order=ORDER_C
+
+            # Each process should send its local sections.
+            sreq = comm.Isend([ltuv, mpi_type], dest=0, tag=0)
+
+            if mpiutil.rank0:
+                # Post each receive
+                reqs = [ comm.Irecv([tuv, subtuv[sr]], source=sr, tag=0) for sr in range(comm.size) ]
+
+                # Wait for requests to complete
+                mpiutil.Prequest.Waitall(reqs)
+
+            # Wait on send request. Important, as can get weird synchronisation
+            # bugs otherwise as processes exit before completing their send.
+            sreq.Wait()
+
+            if mpiutil.rank0:
+                # Make directory for alms file
+                if not os.path.exists(self._almsdir):
+                    os.makedirs(self._almsdir)
+
+                # Save alm
+                with h5py.File(tuvfile, 'w') as f:
+                    f.create_dataset('/tuv', data=tuv)
+
+            del ltuv
+
+        if mpiutil.rank0:
+            # skymap = hputil.sphtrans_inv_sky(alm, nside)
+            print 'tuv.shape:', tuv.shape
+            skymap = np.fft.ifft2(tuv).real
+            # Make directory for maps file
+            if not os.path.exists(self._mapsdir):
+                os.makedirs(self._mapsdir)
+
+            lat, lon = np.degrees(tel.zenith) # degrees
+            latra = [lat-tel.latra[0], lat+tel.latra[1]]
+            lonra = [lon-tel.lonra[0], lon+tel.lonra[1]]
+            # save map
+            with h5py.File(mapfile, 'w') as f:
+                f.create_dataset('/map', data=skymap)
+                f.attrs['lat_min'] = latra[0]
+                f.attrs['lat_max'] = latra[1]
+                f.attrs['lon_min'] = lonra[0]
+                f.attrs['lon_max'] = lonra[1]
+
+        mpiutil.barrier()
+
+
+    def mapmake_svd(self, nside, maptype, fwhm=0.0, rank_ratio=0.0, lcut=None):
 
         mapfile = self._mapsdir + 'map_%s.hdf5' % maptype
         almfile = self._almsdir + 'alm_%s.hdf5' % maptype

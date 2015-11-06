@@ -317,7 +317,7 @@ class BeamTransfer(object):
     @property
     def _udir(self):
         # Directory to save `u` ordered beam transfer matrix files
-        return self.directory + '/beam_u'
+        return self.directory + '/beam_u/'
 
     def _ufile(self, ui):
         # Pattern to form the `u` ordered beam transfer matrix file
@@ -460,9 +460,9 @@ class BeamTransfer(object):
 
     #====== Loading l-order beams ======================
 
-    def _load_beam_u(self, fi=None):
+    def _load_beam_u(self, ui, fi=None):
         ## Read in beam from disk
-        with h5py.File(self._ufile(), 'r') as ufile:
+        with h5py.File(self._ufile(ui), 'r') as ufile:
 
             # If fi is None, return all frequency blocks. Otherwise just the one requested.
             if fi is None:
@@ -474,7 +474,7 @@ class BeamTransfer(object):
 
 
     @util.cache_last
-    def beam_u(self, fi=None):
+    def beam_u(self, ui, fi=None):
         """Fetch the meam transfer matrix for a given u.
 
         Parameters
@@ -489,7 +489,7 @@ class BeamTransfer(object):
         beam : np.ndarray (nfreq, npairs, npol_sky, num_v)
         """
 
-        return self._load_beam_u(fi=fi)
+        return self._load_beam_u(ui, fi=fi)
 
     #===================================================
 
@@ -1240,9 +1240,9 @@ class BeamTransfer(object):
                     for fbl, fbi in enumerate(range(fbstart, fbend)):
                         fi = fbmap[0, fbi]
                         bi = fbmap[1, fbi]
-                        mfile['beam_u'][fi, :, bi] = u_array[fbl, ..., lui]
+                        ufile['beam_u'][fi, :, bi] = u_array[fbl, ..., lui]
 
-            del m_array
+            del u_array
 
         mpiutil.barrier()
 
@@ -1550,7 +1550,7 @@ class BeamTransfer(object):
         else:
             lside = min(maxl+1, self.telescope.lmax+1)
         nlms = lside**2
-        beam = np.zeros((nphi, self.nbase, npol, nlms), dtype=self.beam_m(0).dtype)
+        beam = np.zeros((nphi, self.nbase, npol, nlms), dtype=self.beam_l(0).dtype)
 
         # sum_ephi = np.zeros(2*lside-1, dtype=np.complex128)
         # for mi in range(-lside+1, lside):
@@ -1564,7 +1564,7 @@ class BeamTransfer(object):
             for li in range(lside):
                 tmp = self.beam_l(li, fi)
                 shp = tmp.shape
-                tmp = np.tile(self.beam_l(li, fi), (nphi, 1, 1)).reshape((nphi,) + shp)
+                tmp = np.tile(tmp, (nphi, 1, 1)).reshape((nphi,) + shp)
                 beam[..., li**2:(li+1)**2] = tmp
                 for pi, phi in enumerate(phis):
                     for mi in range(-li, li+1):
@@ -1602,6 +1602,68 @@ class BeamTransfer(object):
                 for mi in range(0, li+1):
                     vecb[ind, :, li, mi] = 0.5 * (x[:, li**2+li+mi] + (-1)**mi * x[:, li**2+li-mi].conj())
                     # vecb[ind, :, li, mi] = x[:, li**2+li+mi]
+
+        return vecb
+
+
+    def project_vector_telescope_to_sky_ft(self, vec, phis, local_freq):
+        """Invert a vector from the telescope space onto the sky. This is the
+        map-making process."""
+
+        lfreq = len(local_freq)
+        nphi = phis.shape[0]
+        npol = self.telescope.num_pol_sky
+        u_max = self.telescope.u_max
+        v_max = self.telescope.v_max
+        nuvs = (2*u_max+1) * (2*v_max+1)
+        beam = np.zeros((nphi, self.nbase, npol, 2*u_max+1, 2*v_max+1), dtype=self.beam_u(0).dtype)
+
+        vecb = np.zeros((lfreq, npol, 2*u_max+1, 2*v_max+1), dtype=np.complex128)
+
+        for ind, fi in enumerate(local_freq):
+            print 'Map-making for freq: %d of %d...' % (fi, self.nfreq)
+            # load the beam from disk for frequency fi
+            for ui in range(u_max+1):
+                tmp = self.beam_u(ui, fi)
+                shp = tmp.shape
+                tmp = np.tile(tmp, (nphi, 1, 1)).reshape((nphi,) + shp)
+                beam[..., ui, :] = tmp[:, 0]
+                if ui != 0:
+                    beam[..., -ui, :] = tmp[:, 1]
+                for pi, phi in enumerate(phis):
+                    beam[pi, ..., ui, :] *= np.exp(2 * np.pi * 1.0J * ui * phi)
+                    if ui != 0:
+                        beam[pi, ..., -ui, :] *= np.exp(-2 * np.pi * 1.0J * ui * phi)
+            beam = beam.reshape(nphi*self.nbase, npol*nuvs)
+
+            if self.noise_weight:
+                noisew = self.telescope.noisepower(np.arange(self.nbase), fi).flatten()**(-0.5)
+                noisew = np.tile(noisew, nphi)
+                beam = beam * noisew[:, np.newaxis]
+                v = vec[ind].T.reshape(-1) * noisew
+
+            # print 'Start dot...'
+            # lhs = np.dot(beam.T.conj(), beam)
+            # print 'Dot done.'
+            # # for li in range(lside):
+            # #     for mi in range(-li, li+1):
+            # #         lhs[li**2+li+mi] *= sum_ephi[mi]
+            # print 'Start dot...'
+            # rhs = np.dot(beam.T.conj(), vec[ind])
+            # print 'Dot done.'
+
+            print 'Start solve...'
+            x, resids, rank, s = la.lstsq(beam, v, cond=1e-2)
+            # x = complex_br(beam, v, tol=1.0e-6, copy_A=False)
+            print 'Solve done.'
+            x = x.reshape(npol, 2*u_max+1, 2*v_max+1)
+
+            vecb[ind] = x
+
+            # for ui in range(lside):
+            #     for mi in range(0, li+1):
+            #         vecb[ind, :, li, mi] = 0.5 * (x[:, li**2+li+mi] + (-1)**mi * x[:, li**2+li-mi].conj())
+            #         # vecb[ind, :, li, mi] = x[:, li**2+li+mi]
 
         return vecb
 

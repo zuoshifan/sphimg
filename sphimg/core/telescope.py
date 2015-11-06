@@ -182,7 +182,7 @@ class TransitTelescope(config.Reader):
 
     u_max = config.Property(proptype=typeutil.positive_int, default=100)
     v_max = config.Property(proptype=typeutil.positive_int, default=100)
-    latra = config.Property(proptype=list, default=[4, 4])
+    latra = config.Property(proptype=list, default=[4, 4]) # degrees
     lonra = config.Property(proptype=list, default=[4, 4])
 
 
@@ -941,7 +941,7 @@ class UnpolarisedTelescope(TransitTelescope):
         lonra = [lon-self.lonra[0], lon+self.lonra[1]]
         beam_cart = healpy.cartview(cvis, latra=latra, lonra=lonra, xsize=2*self.u_max+1, ysize=2*self.v_max+1, return_projected_map=True) # only T map
         # beam_uv = np.fft.fftshift(np.fft.fft(beam_cart)) # zero freq at center
-        beam_uv = np.fft.fft(beam_cart) # zero freq at left
+        beam_uv = np.fft.fft2(beam_cart) # zero freq at left
 
         return beam_uv
 
