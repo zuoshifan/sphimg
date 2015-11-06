@@ -2,6 +2,9 @@ import abc
 
 import numpy as np
 import h5py
+import healpy
+import matplotlib
+matplotlib.use('Agg')
 
 from cora.util import hputil, units
 
@@ -648,13 +651,13 @@ class TransitTelescope(config.Reader):
 
         u_max, v_max = self.u_max, self.v_max
         # Generate the Fourier transform array for the Transfer functions
-        tshape = (nbl, nf, self.num_pol_sky, 2*u_max+1, 2*v_max+1)
+        tshape = (nbl, self.num_pol_sky, 2*u_max+1, 2*v_max+1)
         print "Size: %i elements. Memory %f GB." % (np.prod(tshape), 2*np.prod(tshape) * 8.0 / 2**30)
         tarray = np.zeros(tshape, dtype=np.complex128)
 
-        for bl_ind in range(nbl):
-            for f_ind in range(nf):
-                tarray[bl_ind, f_ind] = self._transfer_single_uv(bl_indices[bl_ind], f_indices[f_ind])
+        for ind in range(nbl):
+            for pi in range(self.num_pol_sky):
+                tarray[ind, pi] = self._transfer_single_uv(bl_indices[ind], f_indices[ind])[pi]
 
         return tarray
 
@@ -931,6 +934,7 @@ class UnpolarisedTelescope(TransitTelescope):
 
 
     def _transfer_single_uv(self, bl_index, f_index):
+        lmax = self.lmax
         if self._nside != hputil.nside_for_lmax(lmax, accuracy_boost=self.accuracy_boost):
             self._init_trans(hputil.nside_for_lmax(lmax, accuracy_boost=self.accuracy_boost))
 
@@ -943,7 +947,7 @@ class UnpolarisedTelescope(TransitTelescope):
         # beam_uv = np.fft.fftshift(np.fft.fft(beam_cart)) # zero freq at center
         beam_uv = np.fft.fft2(beam_cart) # zero freq at left
 
-        return beam_uv
+        return [ beam_uv ]
 
 
     #===================================================

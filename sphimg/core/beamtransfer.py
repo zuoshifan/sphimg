@@ -1211,7 +1211,7 @@ class BeamTransfer(object):
             if loc_num > 0:
 
                 # Calculate the local Beam Matrices
-                tarray = self.telescope.transfer_matrices(bl_ind, f_ind)
+                tarray = self.telescope.transfer_uv(bl_ind, f_ind)
 
                 # Expensive memory copy into array section
                 for ui in range(1, u_max+1):
