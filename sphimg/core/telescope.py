@@ -948,8 +948,7 @@ class UnpolarisedTelescope(TransitTelescope):
         beam_cart_real = healpy.cartview(cvis.real, latra=latra, lonra=lonra, xsize=2*self.v_max+1, ysize=2*self.u_max+1, return_projected_map=True) # only T map
         beam_cart_imag = healpy.cartview(cvis.imag, latra=latra, lonra=lonra, xsize=2*self.v_max+1, ysize=2*self.u_max+1, return_projected_map=True) # only T map
         beam_cart = beam_cart_real + 1.0J * beam_cart_imag
-        # beam_uv = np.fft.fftshift(np.fft.fft(beam_cart)) # zero freq at center
-        beam_uv = np.fft.fft2(beam_cart) # zero freq at left
+        beam_uv = np.prod(beam_cart.shape[-2:]) * np.fft.ifft2(beam_cart) # zero freq at left
 
         return [ beam_uv ]
 

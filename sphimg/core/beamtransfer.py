@@ -1621,20 +1621,23 @@ class BeamTransfer(object):
 
         vecb = np.zeros((lfreq, npol, 2*u_max+1, 2*v_max+1), dtype=np.complex128)
 
+        lon_ext = np.radians(np.sum(self.telescope.lonra)) # radians
         for ind, fi in enumerate(local_freq):
             print 'Map-making for freq: %d of %d...' % (fi, self.nfreq)
             # load the beam from disk for frequency fi
             for ui in range(u_max+1):
                 tmp = self.beam_u(ui, fi)
                 shp = tmp.shape
-                tmp = np.tile(tmp, (nphi, 1, 1)).reshape((nphi,) + shp)
+                tmp = np.tile(tmp, (nphi, 1, 1, 1)).reshape((nphi,) + shp)
                 beam[..., ui, :] = tmp[:, 0]
                 if ui != 0:
                     beam[..., -ui, :] = tmp[:, 1]
                 for pi, phi in enumerate(phis):
-                    beam[pi, ..., ui, :] *= np.exp(2 * np.pi * 1.0J * ui * phi)
+                    # alpha = (2*u_max + 1) * phi / lon_ext
+                    alpha =  phi / lon_ext
+                    beam[pi, ..., ui, :] *= np.exp(2 * np.pi * 1.0J * ui * alpha)
                     if ui != 0:
-                        beam[pi, ..., -ui, :] *= np.exp(-2 * np.pi * 1.0J * ui * phi)
+                        beam[pi, ..., -ui, :] *= np.exp(-2 * np.pi * 1.0J * ui * alpha)
             beam = beam.reshape(nphi*self.nbase, npol*nuvs)
             v = vec[ind].T.reshape(-1)
 

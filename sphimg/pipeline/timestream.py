@@ -635,7 +635,7 @@ class Timestream(object):
             phi_inds = list(set(phi_inds) & set(range(self.ntime)))
             old_phis = self.tphi[phi_inds]
             nphi = old_phis.shape[0]
-            phis = old_phis - old_phis[nphi/2] # make center phi 0
+            phis = old_phis - old_phis[(nphi-1)/2] # make center phi 0
 
             lfreq, sfreq, efreq = mpiutil.split_local(nfreq)
             local_freq = range(sfreq, efreq)
@@ -695,8 +695,7 @@ class Timestream(object):
 
         if mpiutil.rank0:
             # skymap = hputil.sphtrans_inv_sky(alm, nside)
-            # skymap = np.fft.ifft2(tuv).real
-            skymap = np.fft.fft2(tuv).real
+            skymap = np.prod(tuv.shape[-2:]) * np.fft.ifft2(tuv).real
             # Make directory for maps file
             if not os.path.exists(self._mapsdir):
                 os.makedirs(self._mapsdir)
