@@ -1570,12 +1570,13 @@ class BeamTransfer(object):
                     for mi in range(-li, li+1):
                         beam[pi, ..., li**2+li+mi] *= np.exp(1.0J * mi * phi)
             beam = beam.reshape(nphi*self.nbase, npol*nlms)
+            v = vec[ind].T.reshape(-1)
 
             if self.noise_weight:
                 noisew = self.telescope.noisepower(np.arange(self.nbase), fi).flatten()**(-0.5)
                 noisew = np.tile(noisew, nphi)
                 beam = beam * noisew[:, np.newaxis]
-                v = vec[ind].T.reshape(-1) * noisew
+                v = v * noisew
 
             # print 'Start dot...'
             # lhs = np.dot(beam.T.conj(), beam)
@@ -1635,12 +1636,13 @@ class BeamTransfer(object):
                     if ui != 0:
                         beam[pi, ..., -ui, :] *= np.exp(-2 * np.pi * 1.0J * ui * phi)
             beam = beam.reshape(nphi*self.nbase, npol*nuvs)
+            v = vec[ind].T.reshape(-1)
 
             if self.noise_weight:
                 noisew = self.telescope.noisepower(np.arange(self.nbase), fi).flatten()**(-0.5)
                 noisew = np.tile(noisew, nphi)
                 beam = beam * noisew[:, np.newaxis]
-                v = vec[ind].T.reshape(-1) * noisew
+                v = v * noisew
 
             # print 'Start dot...'
             # lhs = np.dot(beam.T.conj(), beam)

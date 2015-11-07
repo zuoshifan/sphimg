@@ -934,13 +934,15 @@ class UnpolarisedTelescope(TransitTelescope):
 
 
     def _transfer_single_uv(self, bl_index, f_index):
-        lmax = self.lmax
-        if self._nside != hputil.nside_for_lmax(lmax, accuracy_boost=self.accuracy_boost):
-            self._init_trans(hputil.nside_for_lmax(lmax, accuracy_boost=self.accuracy_boost))
+        # lmax = self.lmax
+        # if self._nside != hputil.nside_for_lmax(lmax, accuracy_boost=self.accuracy_boost):
+        #     self._init_trans(hputil.nside_for_lmax(lmax, accuracy_boost=self.accuracy_boost))
+        self._init_trans(512)
 
         cvis = self._beam_map_single(bl_index, f_index)
 
         lat, lon = np.degrees(self.zenith) # degrees
+        lat = 90.0 - lat # zenith reference to the North Pole
         latra = [lat-self.latra[0], lat+self.latra[1]]
         lonra = [lon-self.lonra[0], lon+self.lonra[1]]
         beam_cart_real = healpy.cartview(cvis.real, latra=latra, lonra=lonra, xsize=2*self.u_max+1, ysize=2*self.v_max+1, return_projected_map=True) # only T map

@@ -633,9 +633,9 @@ class Timestream(object):
             tel = self.telescope
             nfreq = tel.nfreq
             phi_inds = list(set(phi_inds) & set(range(self.ntime)))
-            phis = self.tphi[phi_inds]
-            nphi = phis.shape[0]
-            phis = phis - phis[nphi/2] # make center phi 0
+            old_phis = self.tphi[phi_inds]
+            nphi = old_phis.shape[0]
+            phis = old_phis - old_phis[nphi/2] # make center phi 0
 
             lfreq, sfreq, efreq = mpiutil.split_local(nfreq)
             local_freq = range(sfreq, efreq)
@@ -695,7 +695,6 @@ class Timestream(object):
 
         if mpiutil.rank0:
             # skymap = hputil.sphtrans_inv_sky(alm, nside)
-            print 'tuv.shape:', tuv.shape
             # skymap = np.fft.ifft2(tuv).real
             skymap = np.fft.fft2(tuv).real
             # Make directory for maps file
@@ -703,6 +702,10 @@ class Timestream(object):
                 os.makedirs(self._mapsdir)
 
             lat, lon = np.degrees(tel.zenith) # degrees
+            lat = 90.0 - lat
+            lon = lon + np.degrees(old_phis[nphi/2])
+            print 'lat:', lat
+            print 'lon:', lon
             latra = [lat-tel.latra[0], lat+tel.latra[1]]
             lonra = [lon-tel.lonra[0], lon+tel.lonra[1]]
             # save map
