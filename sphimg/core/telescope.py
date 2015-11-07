@@ -945,8 +945,8 @@ class UnpolarisedTelescope(TransitTelescope):
         lat = 90.0 - lat # zenith reference to the North Pole
         latra = [lat-self.latra[0], lat+self.latra[1]]
         lonra = [lon-self.lonra[0], lon+self.lonra[1]]
-        beam_cart_real = healpy.cartview(cvis.real, latra=latra, lonra=lonra, xsize=2*self.u_max+1, ysize=2*self.v_max+1, return_projected_map=True) # only T map
-        beam_cart_imag = healpy.cartview(cvis.imag, latra=latra, lonra=lonra, xsize=2*self.u_max+1, ysize=2*self.v_max+1, return_projected_map=True) # only T map
+        beam_cart_real = healpy.cartview(cvis.real, latra=latra, lonra=lonra, xsize=2*self.v_max+1, ysize=2*self.u_max+1, return_projected_map=True) # only T map
+        beam_cart_imag = healpy.cartview(cvis.imag, latra=latra, lonra=lonra, xsize=2*self.v_max+1, ysize=2*self.u_max+1, return_projected_map=True) # only T map
         beam_cart = beam_cart_real + 1.0J * beam_cart_imag
         # beam_uv = np.fft.fftshift(np.fft.fft(beam_cart)) # zero freq at center
         beam_uv = np.fft.fft2(beam_cart) # zero freq at left
