@@ -1635,9 +1635,9 @@ class BeamTransfer(object):
                 for pi, phi in enumerate(phis):
                     # alpha = (2*u_max + 1) * phi / lon_ext
                     alpha =  phi / lon_ext
-                    beam[pi, ..., ui, :] *= np.exp(2 * np.pi * 1.0J * ui * alpha)
+                    beam[pi, ..., ui, :] *= np.exp(-2 * np.pi * 1.0J * ui * alpha)
                     if ui != 0:
-                        beam[pi, ..., -ui, :] *= np.exp(-2 * np.pi * 1.0J * ui * alpha)
+                        beam[pi, ..., -ui, :] *= np.exp(2 * np.pi * 1.0J * ui * alpha)
             beam = beam.reshape(nphi*self.nbase, npol*nuvs)
             v = vec[ind].T.reshape(-1)
 
