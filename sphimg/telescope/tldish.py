@@ -81,6 +81,9 @@ class TlDishArray(config.Reader):
 
     __metaclass__ = abc.ABCMeta  # Enforce Abstract class
 
+    # choose antennas to include, number from 1
+    ants = config.Property(proptype=list, default=range(1, 17))
+
     # Set band properties (overriding baseclass)
     zenith = config.Property(proptype=latlon_to_sphpol, default=[ang_conv('44:9:8.439'), ang_conv('91:48:20.177')])
     freq_lower = config.Property(proptype=float, default=700.0)
@@ -109,6 +112,7 @@ class TlDishArray(config.Reader):
         pos = np.loadtxt(os.path.dirname(__file__) + '/16dishes_coord.txt')
         cpos = pos[self.center_dish] # central antenna coordinate
         pos -= cpos
+        pos = pos[np.array(self.ants)-1] # choose antennas to include
 
         return pos
 
