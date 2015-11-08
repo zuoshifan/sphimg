@@ -882,8 +882,11 @@ class BeamTransfer(object):
                 print '=' * 80
                 print 'Crreate telescope data file %s...' % self._tel_datafile
                 with h5py.File(self._tel_datafile, 'w') as f:
-                    f.create_dataset('baselines', data=self.telescope.baselines)
                     f.create_dataset('frequencies', data=self.telescope.frequencies)
+                    f.create_dataset('baselines', data=self.telescope.baselines)
+                    f.create_dataset('uniquepairs', data=self.telescope.uniquepairs)
+                    f.create_dataset('allpairs', data=self.telescope.allpairs)
+                    f.create_dataset('redundancy', data=self.telescope.redundancy)
 
         mpiutil.barrier()
 

@@ -74,7 +74,7 @@ def _remap_keyarray(keyarray, mask=None):
     return fmap
 
 
-def _get_indices(keyarray, mask=None):
+def _get_indices(keyarray, mask=None, return_allpairs=False):
     # Return a pair of indices for each group of equivalent feed pairs
     if mask is None:
         mask = np.ones(keyarray.shape, np.bool)
@@ -87,8 +87,17 @@ def _get_indices(keyarray, mask=None):
     #upairs = np.array(np.unravel_index(wm[ind], keyarray.shape)).T
     upairs = np.array([np.unravel_index(i1, keyarray.shape) for i1 in wm[ind] ])
 
-    #return np.sort(upairs, axis=-1) # Sort to ensure we are in upper triangle
-    return upairs
+    # get all feed pairs grouped by redundancy
+    if return_allpairs:
+        all_inds = []
+        for ui in un:
+            all_inds += np.where(keysflat == ui)[0].tolist()
+        all_pairs = np.array([np.unravel_index(i1, keyarray.shape) for i1 in wm[all_inds] ])
+
+        #return np.sort(upairs, axis=-1) # Sort to ensure we are in upper triangle
+        return upairs, all_pairs
+    else:
+        return upairs
 
 
 def max_lm(baselines, wavelengths, uwidth, vwidth=0.0):
@@ -261,6 +270,16 @@ class TransitTelescope(config.Reader):
         return self._uniquepairs
 
 
+    _allpairs = None
+
+    @property
+    def allpairs(self):
+        """An (nbl, 2) array of the all antenna feed pairs grouped according to redundancies."""
+        if self._allpairs is None:
+            self.calculate_feedpairs()
+        return self._allpairs
+
+
     _feedmap = None
 
     @property
@@ -396,7 +415,7 @@ class TransitTelescope(config.Reader):
         # Create mask of included pairs, that are not conjugated
         tmask = np.logical_and(self._feedmask, np.logical_not(self._feedconj))
 
-        self._uniquepairs = _get_indices(self._feedmap, mask=tmask)
+        self._uniquepairs, self._allpairs = _get_indices(self._feedmap, mask=tmask, return_allpairs=True)
         self._redundancy = np.bincount(self._feedmap[np.where(tmask)]) # Triangle mask to avoid double counting
         self._baselines = self.feedpositions[self._uniquepairs[:, 0]] - self.feedpositions[self._uniquepairs[:, 1]]
 
