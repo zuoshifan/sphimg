@@ -76,6 +76,8 @@ class TlDishArray(config.Reader):
         Width of the dish in metres.
     center_dish : integer
         The reference dish.
+    freq_inds: list
+        Choose frequency channels to include.
 
     """
 
@@ -86,14 +88,22 @@ class TlDishArray(config.Reader):
 
     # Set band properties (overriding baseclass)
     zenith = config.Property(proptype=latlon_to_sphpol, default=[ang_conv('44:9:8.439'), ang_conv('91:48:20.177')])
-    freq_lower = config.Property(proptype=float, default=700.0)
-    freq_upper = config.Property(proptype=float, default=800.0)
-    num_freq = config.Property(proptype=int, default=512)
+    # freq_lower = config.Property(proptype=float, default=700.0)
+    # freq_upper = config.Property(proptype=float, default=800.0)
+    # num_freq = config.Property(proptype=int, default=512)
     tsys_flat = config.Property(proptype=float, default=50.0, key='tsys')
 
     # Properties for the Dish Array
     dish_width = config.Property(proptype=float, default=6.0)
     center_dish = config.Property(proptype=int, default=15)
+
+    freq_inds = config.Property(proptype=list, default=range(512))
+
+    # redefine method to get frequencies
+    @property
+    def frequencies(self):
+        """The centre of each frequency band (in MHz)."""
+        return np.load(os.path.dirname(__file__) + '/tldish_freqs.npy')[self.freq_inds]
 
     # Give the widths in the U and V directions in metres (used for
     # calculating the maximum l and m)
