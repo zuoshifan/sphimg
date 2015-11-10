@@ -7,6 +7,8 @@ from cora.util import coord
 from sphimg.core import telescope
 from sphimg.util import config
 
+import aipy
+
 
 def ang_conv(ang):
     """
@@ -88,6 +90,8 @@ class TlDishArray(config.Reader):
 
     # Set band properties (overriding baseclass)
     zenith = config.Property(proptype=latlon_to_sphpol, default=[ang_conv('44:9:8.439'), ang_conv('91:48:20.177')])
+    # Set the antenna beam to point at (az, alt) with specified right-hand twist to polarizations.  Polarization y is assumed to be +pi/2 azimuth from pol x.
+    point_dirction = config.Property(proptype=list, default=[0.0, 90, 0.0]) # [az, alt, twist], Unit: degree
     # freq_lower = config.Property(proptype=float, default=700.0)
     # freq_upper = config.Property(proptype=float, default=800.0)
     # num_freq = config.Property(proptype=int, default=512)
@@ -127,6 +131,71 @@ class TlDishArray(config.Reader):
         return pos
 
 
+    _pointing = None
+
+    @property
+    def pointing(self):
+        """The pointing vector [theta, phi], which is the direction of the maximum beam response."""
+        if self._pointing is None:
+            self.set_pointing()
+
+        return self._pointing
+
+    def set_pointing(self):
+        """Set the antenna beam to point at (az, alt) with specified
+        right-hand twist to polarizations.  Polarization y is assumed
+        to be +pi/2 azimuth from pol x."""
+        az, alt, twist = np.radians(self.point_dirction)
+
+        y, z = np.array([0,1,0]), np.array([0,0,1])
+        # Twist is negative b/c we apply it to the coords, not the beam
+        # rot = aipy.coord.rot_m(-twist, z)
+        # rot = np.dot(rot, aipy.coord.rot_m(alt-np.pi/2, y))
+        # # NOTE the az, alt definition, az (clockwise around z = up, 0 at x axis = north), alt (from horizon), see also coord.azalt2top
+        # # rot = n.dot(rot, coord.rot_m(-az, z))
+        # rot = np.dot(rot, aipy.coord.rot_m(-(np.pi/2 - az), z))
+        # self.rot_pol_x = rot
+        # self.rot_pol_y = n.dot(coord.rot_m(-n.pi/2, z), rot)
+        # self._pointing = coord.sph_to_cart(np.dot(np.inv(rot), coord.sph_to_cart(self.zenith)))[-2:]
+
+        # rot = aipy.coord.rot_m(np.pi/2-az, z)
+        # rot = np.dot(aipy.coord.rot_m(np.pi/2-alt, y), rot)
+        # rot = np.dot(aipy.coord.rot_m(twist, z), rot)
+
+        # # convert self.zenith in eq coord to topocentric coord
+        lat = np.pi/2 - self.zenith[0]
+        lon = self.zenith[1]
+        # zenith = coord.sph_to_cart(self.zenith)
+        # zenith = np.dot(aipy.coord.rot_m(-lon, z), zenith)
+        # z_top = np.dot(aipy.coord.eq2top_m(0.0, lat), zenith)
+        # print 'z_top:', z_top
+        # # rotate to the pointing direction
+        # p_top = np.dot(np.linalg.inv(rot), coord.sph_to_cart(self.zenith))
+        # # convert p_top to eq coord
+        # p_eq = np.dot(aipy.coord.top2eq_m(0.0, lat), p_top)
+        # p_eq = np.dot(aipy.coord.rot_m(lon, z), zenith)
+        # self._pointing = coord.sph_to_cart(p_eq)[-2:]
+        # print 'self._pointing,', self._pointing
+        # print 'self._zenith:', self.zenith
+
+        saz, caz = np.sin(az), np.cos(az)
+        salt, calt = np.sin(alt), np.cos(alt)
+        slat, clat = np.sin(lat), np.cos(lat)
+        slon, clon = np.sin(lon), np.cos(lon)
+        top2eq_m = np.array([[-slon, -slat*clon, clat*clon],
+                            [ clon, -slat*slon, clat*slon],
+                            [    0,       clat,      slat]])
+        # p_top = np.dot(np.linalg.inv(rot), z)
+        p_top = np.array([saz*calt, caz*calt, salt])
+        # print 'rot:', rot
+        print 'p_top:', p_top
+        p_eq = np.dot(top2eq_m, p_top)
+        self._pointing = coord.cart_to_sph(p_eq)[-2:]
+        print 'self._pointing,', self._pointing
+        print 'self._zenith:', self.zenith
+        err
+
+
 class TlUnpolarisedDishArray(TlDishArray, telescope.SimpleUnpolarisedTelescope):
     """A Telescope describing the Tianlai non-polarized dishe array.
 
@@ -153,7 +222,9 @@ class TlUnpolarisedDishArray(TlDishArray, telescope.SimpleUnpolarisedTelescope):
             A Healpix map (of size self._nside) of the beam. Potentially
             complex.
         """
-        return beam_circular(self._angpos, self.zenith,
+        # return beam_circular(self._angpos, self.zenith,
+        #                      self.dish_width / self.wavelengths[freq])
+        return beam_circular(self._angpos, self.pointing,
                              self.dish_width / self.wavelengths[freq])
 
 
@@ -187,7 +258,9 @@ class TlPolarisedDishArray(telescope.SimplePolarisedTelescope):
             theta and phi directions.
         """
         # Calculate beam amplitude
-        beam = beam_circular(self._angpos, self.zenith,
+        # beam = beam_circular(self._angpos, self.zenith,
+        #                      self.dish_width / self.wavelengths[freq])
+        return beam_circular(self._angpos, self.pointing,
                              self.dish_width / self.wavelengths[freq])
 
         # Add a vector direction to beam - X beam is EW (phihat)
@@ -212,7 +285,9 @@ class TlPolarisedDishArray(telescope.SimplePolarisedTelescope):
             theta and phi directions.
         """
         # Calculate beam amplitude
-        beam = beam_circular(self._angpos, self.zenith,
+        # beam = beam_circular(self._angpos, self.zenith,
+        #                      self.dish_width / self.wavelengths[freq])
+        return beam_circular(self._angpos, self.pointing,
                              self.dish_width / self.wavelengths[freq])
 
         # Add a vector direction to beam - Y beam is NS (thetahat)
