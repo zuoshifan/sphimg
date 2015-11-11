@@ -700,7 +700,11 @@ class Timestream(object):
             if not os.path.exists(self._mapsdir):
                 os.makedirs(self._mapsdir)
 
-            lat, lon = np.degrees(tel.zenith) # degrees
+            try:
+                # may not point to the zenith
+                lat, lon = np.degrees(tel.point_dirction) # degrees
+            except AttributeError:
+                lat, lon = np.degrees(tel.zenith) # degrees
             lat = 90.0 - lat
             lon = lon + np.degrees(old_phis[nphi/2])
             print 'lat:', lat

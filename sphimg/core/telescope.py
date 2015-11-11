@@ -957,7 +957,11 @@ class UnpolarisedTelescope(TransitTelescope):
 
         cvis = self._beam_map_single(bl_index, f_index)
 
-        lat, lon = np.degrees(self.zenith) # degrees
+        try:
+            # may not point to the zenith
+            lat, lon = np.degrees(self.point_dirction) # degrees
+        except AttributeError:
+            lat, lon = np.degrees(self.zenith) # degrees
         lat = 90.0 - lat # zenith reference to the North Pole
         latra = [lat-self.latra[0], lat+self.latra[1]]
         lonra = [lon-self.lonra[0], lon+self.lonra[1]]
