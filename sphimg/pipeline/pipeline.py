@@ -17,6 +17,17 @@ def fixpath(path):
 
     return path
 
+def flatten_lst(lst):
+    """Flatten `lst` in format [..., [stat, stop, inc], ...] to a ranged list."""
+    flst = []
+    for elt in lst:
+        if type(elt) is list:
+            flst += range(*elt)
+        else:
+            flst.append(elt)
+
+    return flst
+
 
 class PipelineManager(config.Reader):
     """Manage and run the pipeline.
@@ -65,7 +76,7 @@ class PipelineManager(config.Reader):
     generate_kl_map = config.Property(proptype=bool, default=True)
 
     maxl = config.Property(proptype=typeutil.none_or_natural_int, default=None)
-    phi_inds = config.Property(proptype=typeutil.non_empty_list, default=[0])
+    phi_inds = config.Property(proptype=flatten_lst, default=[0])
 
     no_m_zero = config.Property(proptype=bool, default=True)
 
