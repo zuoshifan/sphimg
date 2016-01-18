@@ -94,7 +94,8 @@ class TlDishArray(config.Reader):
     ants = config.Property(proptype=list, default=range(1, 17))
 
     # Set band properties (overriding baseclass)
-    zenith = config.Property(proptype=latlon_to_sphpol, default=[ang_conv('44:9:8.439'), ang_conv('91:48:20.177')])
+    # zenith = config.Property(proptype=latlon_to_sphpol, default=[ang_conv('44:9:8.439'), ang_conv('91:48:20.177')])
+    zenith = config.Property(proptype=latlon_to_sphpol, default=[ang_conv('44:9:8.439'), ang_conv('0:0:0.0')]) # more convenient for lon = 0
     # Set the antenna beam to point at (az, alt) with specified right-hand twist to polarizations.  Polarization y is assumed to be +pi/2 azimuth from pol x.
     pointing = config.Property(proptype=list, default=[0.0, 90, 0.0]) # [az, alt, twist], Unit: degree
     # freq_lower = config.Property(proptype=float, default=700.0)
