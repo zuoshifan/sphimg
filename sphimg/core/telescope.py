@@ -192,10 +192,10 @@ class TransitTelescope(config.Reader):
     auto_correlations = config.Property(proptype=bool, default=False)
 
 
-    u_max = config.Property(proptype=typeutil.positive_int, default=100)
+    u_max = config.Property(proptype=typeutil.positive_int, default=300)
     v_max = config.Property(proptype=typeutil.positive_int, default=100)
     latra = config.Property(proptype=list, default=[4, 4]) # degrees
-    lonra = config.Property(proptype=list, default=[4, 4])
+    # lonra = config.Property(proptype=list, default=[180, 180]) # should always be [180, 180] since its period is 2pi
 
 
     # def __init__(self, latitude=45, longitude=0):
@@ -964,7 +964,6 @@ class UnpolarisedTelescope(TransitTelescope):
             lat, lon = np.degrees(self.zenith) # degrees
         lat = 90.0 - lat # zenith reference to the North Pole
         latra = [lat-self.latra[0], lat+self.latra[1]]
-        # lonra = [lon-self.lonra[0], lon+self.lonra[1]]
         lonra = [lon-180, lon+180]
         beam_cart_real = healpy.cartview(cvis.real, latra=latra, lonra=lonra, xsize=2*self.u_max+1, ysize=2*self.v_max+1, return_projected_map=True) # only T map
         beam_cart_imag = healpy.cartview(cvis.imag, latra=latra, lonra=lonra, xsize=2*self.u_max+1, ysize=2*self.v_max+1, return_projected_map=True) # only T map

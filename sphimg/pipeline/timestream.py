@@ -635,9 +635,6 @@ class Timestream(object):
             phi_inds = list(set(phi_inds) & set(range(self.ntime)))
             phis = self.tphi[phi_inds]
             nphi = phis.shape[0]
-            # old_phis = self.tphi[phi_inds]
-            # nphi = old_phis.shape[0]
-            # phis = old_phis - old_phis[(nphi-1)/2] # make center phi 0
 
             lfreq, sfreq, efreq = mpiutil.split_local(nfreq)
             local_freq = range(sfreq, efreq)
@@ -708,13 +705,10 @@ class Timestream(object):
             except AttributeError:
                 lat, lon = np.degrees(tel.zenith) # degrees
             lat = 90.0 - lat
-            # lon = lon + np.degrees(old_phis[nphi/2])
-            lon = 0
             print 'lat:', lat
             print 'lon:', lon
             latra = [lat-tel.latra[0], lat+tel.latra[1]]
-            # lonra = [lon-tel.lonra[0], lon+tel.lonra[1]]
-            lonra = [-180, 180]
+            lonra = [lon-180, lon+180]
             # save map
             with h5py.File(mapfile, 'w') as f:
                 f.create_dataset('/map', data=skymap)
