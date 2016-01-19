@@ -145,7 +145,8 @@ class TlDishArray(config.Reader):
         if self._point_direction is None:
             self.set_pointing()
 
-        return self._point_direction
+        # return self._point_direction
+        return np.array([self._point_direction[0], 0.0]) # make phi = 0 for convenience
 
     def set_pointing(self):
         """Set the antenna beam to point at (az, alt). """

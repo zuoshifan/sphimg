@@ -1164,7 +1164,7 @@ class BeamTransfer(object):
 
         # Calculate the number of baselines to deal with at any one time. Aim
         # to have a maximum of `self._mem_switch` GB in memory at any one time
-        fbsize = self.telescope.num_pol_sky * (2*u_max+1) * (2*v_max+1) * 16.0
+        fbsize = self.telescope.num_pol_sky * (2*v_max+1) * (2*u_max+1) * 16.0
 
         nodemem = self._mem_switch * 2**30.0
 
@@ -1218,10 +1218,10 @@ class BeamTransfer(object):
 
                 # Expensive memory copy into array section
                 for ui in range(1, u_max+1):
-                    fb_array[:, 0, ..., ui] = tarray[..., ui, :]
-                    fb_array[:, 1, ..., ui] = tarray[..., -ui, :]
+                    fb_array[:, 0, ..., ui] = tarray[..., ui]
+                    fb_array[:, 1, ..., ui] = tarray[..., -ui]
 
-                fb_array[:, 0, ..., 0] = tarray[..., 0, :]
+                fb_array[:, 0, ..., 0] = tarray[..., 0]
 
                 del tarray
 
@@ -1525,16 +1525,16 @@ class BeamTransfer(object):
                 beam[fi] = beam[fi] * noisew[:, np.newaxis]
                 vec[fi] = vec[fi] * noisew
 
-            # x, resids, rank, s = la.lstsq(np.dot(beam[fi].T.conj(), beam[fi]), np.dot(beam[fi].T.conj(), vec[fi]), cond=1e-6)
-            # if rank > rank_ratio * self.nsky(0): # max nsky = nsky(0)
-            #     for p in range(npol):
-            #         vecb[fi, p, mi:lcut1] = x[p*(lcut1-mi):(p+1)*(lcut1-mi)]
-            # else:
-            #     print 'Rank <= %.1f for m = %d, fi = %d...' % (rank_ratio*self.nsky(0), mi, fi)
+            x, resids, rank, s = la.lstsq(np.dot(beam[fi].T.conj(), beam[fi]), np.dot(beam[fi].T.conj(), vec[fi]), cond=1e-6)
+            if rank > rank_ratio * self.nsky(0): # max nsky = nsky(0)
+                for p in range(npol):
+                    vecb[fi, p, mi:lcut1] = x[p*(lcut1-mi):(p+1)*(lcut1-mi)]
+            else:
+                print 'Rank <= %.1f for m = %d, fi = %d...' % (rank_ratio*self.nsky(0), mi, fi)
 
-            x = complex_br(np.dot(beam[fi].T.conj(), beam[fi]), np.dot(beam[fi].T.conj(), vec[fi]), n_iter=500, tol=1.0e-6, copy_A=False)
-            for p in range(npol):
-                vecb[fi, p, mi:lcut1] = x[p*(lcut1-mi):(p+1)*(lcut1-mi)]
+            # x = complex_br(np.dot(beam[fi].T.conj(), beam[fi]), np.dot(beam[fi].T.conj(), vec[fi]), n_iter=500, tol=1.0e-6, copy_A=False)
+            # for p in range(npol):
+            #     vecb[fi, p, mi:lcut1] = x[p*(lcut1-mi):(p+1)*(lcut1-mi)]
 
         return vecb
 
@@ -1592,8 +1592,8 @@ class BeamTransfer(object):
             # print 'Dot done.'
 
             print 'Start solve...'
-            # x, resids, rank, s = la.lstsq(beam, v, cond=1e-2)
-            x = complex_br(beam, v, tol=1.0e-6, copy_A=False)
+            x, resids, rank, s = la.lstsq(beam, v, cond=1e-2)
+            # x = complex_br(beam, v, tol=1.0e-6, copy_A=False)
             print 'Solve done.'
             x = x.reshape(npol, nlms)
 
@@ -1619,12 +1619,12 @@ class BeamTransfer(object):
         npol = self.telescope.num_pol_sky
         u_max = self.telescope.u_max
         v_max = self.telescope.v_max
-        nuvs = (2*u_max+1) * (2*v_max+1)
-        beam = np.zeros((nphi, self.nbase, npol, 2*u_max+1, 2*v_max+1), dtype=self.beam_u(0).dtype)
+        nuvs = (2*v_max+1) * (2*u_max+1)
+        beam = np.zeros((nphi, self.nbase, npol, 2*v_max+1, 2*u_max+1), dtype=self.beam_u(0).dtype)
 
-        vecb = np.zeros((lfreq, npol, 2*u_max+1, 2*v_max+1), dtype=np.complex128)
+        vecb = np.zeros((lfreq, npol, 2*v_max+1, 2*u_max+1), dtype=np.complex128)
 
-        lon_ext = np.radians(np.sum(self.telescope.lonra)) # radians
+        # lon_ext = np.radians(np.sum(self.telescope.lonra)) # radians
         for ind, fi in enumerate(local_freq):
             print 'Map-making for freq: %d of %d...' % (fi, self.nfreq)
             # load the beam from disk for frequency fi
@@ -1632,15 +1632,19 @@ class BeamTransfer(object):
                 tmp = self.beam_u(ui, fi)
                 shp = tmp.shape
                 tmp = np.tile(tmp, (nphi, 1, 1, 1)).reshape((nphi,) + shp)
-                beam[..., ui, :] = tmp[:, 0]
+                beam[..., ui] = tmp[:, 0]
                 if ui != 0:
-                    beam[..., -ui, :] = tmp[:, 1]
+                    beam[..., -ui] = tmp[:, 1]
                 for pi, phi in enumerate(phis):
                     # alpha = (2*u_max + 1) * phi / lon_ext
-                    alpha =  phi / lon_ext
-                    beam[pi, ..., ui, :] *= np.exp(-2 * np.pi * 1.0J * ui * alpha)
+                    # alpha =  phi / lon_ext
+                    # beam[pi, ..., ui, :] *= np.exp(-2 * np.pi * 1.0J * ui * alpha)
+                    beam[pi, ..., ui] *= np.exp(-1.0J * ui * phi)
+                    # beam[pi, ..., ui, :] *= np.exp(1.0J * (2 * np.pi / lon_ext) * ui * phi)
                     if ui != 0:
-                        beam[pi, ..., -ui, :] *= np.exp(2 * np.pi * 1.0J * ui * alpha)
+                        # beam[pi, ..., -ui, :] *= np.exp(2 * np.pi * 1.0J * ui * alpha)
+                        beam[pi, ..., -ui] *= np.exp(-1.0J * (-ui) * phi)
+                        # beam[pi, ..., -ui, :] *= np.exp(1.0J * (2 * np.pi / lon_ext) * (-ui) * phi)
             beam = beam.reshape(nphi*self.nbase, npol*nuvs)
             v = vec[ind].T.reshape(-1)
 
@@ -1664,7 +1668,7 @@ class BeamTransfer(object):
             x, resids, rank, s = la.lstsq(beam, v, cond=1e-2)
             # x = complex_br(beam, v, tol=1.0e-6, copy_A=False)
             print 'Solve done.'
-            x = x.reshape(npol, 2*u_max+1, 2*v_max+1)
+            x = x.reshape(npol, 2*v_max+1, 2*u_max+1)
 
             vecb[ind] = x
 
